@@ -119,6 +119,36 @@ type TriggerImage struct {
 	ImageFileLen int    `json:"imageFileLen"`
 }
 
+// LCD/广告/OSD相关结构体
+
+type LCDConfig struct {
+	Type     string      `json:"type"`
+	Module   string      `json:"module"`
+	ReplyURL string      `json:"reply_url,omitempty"`
+	Body     interface{} `json:"body"`
+}
+
+type AdPushMessage struct {
+	Type     string      `json:"type"`
+	Module   string      `json:"module"`
+	ReplyURL string      `json:"reply_url,omitempty"`
+	Body     interface{} `json:"body"`
+}
+
+type OsdConfig struct {
+	SetOsdPara string      `json:"set_osd_para"`
+	Body       interface{} `json:"body"`
+}
+
+// 新增统一MQTT转发方法
+type MqttEvent map[string]interface{}
+
+func (h *HTTPServer) publishToMQTTEvent(stationID string, event MqttEvent) error {
+	router := h.manager.GetRouter()
+	topic := "device_event" // 可根据需要自定义topic
+	return router.PublishToMQTT(stationID, topic, event)
+}
+
 // parsePlateMessage 解析门禁设备推送消息
 func (h *HTTPServer) parsePlateMessage(body []byte) (*PlateMessage, error) {
 	var plateMsg PlateMessage
@@ -132,6 +162,32 @@ func (h *HTTPServer) parsePlateMessage(body []byte) (*PlateMessage, error) {
 
 // processPlateMessage 处理门禁设备消息
 func (h *HTTPServer) processPlateMessage(stationID string, plateMsg *PlateMessage) (interface{}, error) {
+	// 先判断是否为LCD/广告/OSD相关消息
+	var raw map[string]interface{}
+	if plateMsg != nil {
+		b, _ := json.Marshal(plateMsg)
+		_ = json.Unmarshal(b, &raw)
+		// 检查顶层是否有LCD/广告/OSD相关字段
+		if v, ok := raw["type"]; ok {
+			typeStr, _ := v.(string)
+			if typeStr == "set_ad_config" || typeStr == "get_ad_config" || typeStr == "set_ad_voice_config" || typeStr == "get_ad_voice_config" || typeStr == "ad_push_message" || typeStr == "set_osd_para" || typeStr == "AVS_SET_PIC_OSD_PRM" {
+				h.processLCDRelatedMessage(stationID, raw)
+				return nil, nil
+			}
+		}
+		// 兼容 Response_AlarmInfoPlate 下的 type/module
+		if resp, ok := raw["Response_AlarmInfoPlate"]; ok {
+			if m, ok := resp.(map[string]interface{}); ok {
+				if v, ok := m["type"]; ok {
+					typeStr, _ := v.(string)
+					if typeStr == "set_ad_config" || typeStr == "get_ad_config" || typeStr == "set_ad_voice_config" || typeStr == "get_ad_voice_config" || typeStr == "ad_push_message" || typeStr == "set_osd_para" || typeStr == "AVS_SET_PIC_OSD_PRM" {
+						h.processLCDRelatedMessage(stationID, m)
+						return nil, nil
+					}
+				}
+			}
+		}
+	}
 	// 根据消息类型进行处理
 	if plateMsg.AlarmInfoPlate != nil {
 		return h.processPlateRecognition(stationID, plateMsg.AlarmInfoPlate)
@@ -149,6 +205,7 @@ func (h *HTTPServer) processPlateMessage(stationID string, plateMsg *PlateMessag
 // processPlateRecognition 处理车牌识别结果
 func (h *HTTPServer) processPlateRecognition(stationID string, alarm *AlarmInfoPlate) (interface{}, error) {
 	plateResult := alarm.Result.PlateResult
+	timestamp := plateResult.TimeStamp.Timeval.Sec
 
 	log.Printf("车牌识别结果: 工位=%s, 车牌=%s, 置信度=%d, 设备=%s",
 		stationID, plateResult.License, plateResult.Confidence, alarm.IPAddr)
@@ -166,36 +223,63 @@ func (h *HTTPServer) processPlateRecognition(stationID string, alarm *AlarmInfoP
 			"serial_no":   alarm.SerialNo,
 			"last_plate":  plateResult.License,
 			"confidence":  plateResult.Confidence,
-			"timestamp":   plateResult.TimeStamp.Timeval.Sec,
+			"timestamp":   timestamp,
 		},
 	})
 
-	// 发布车牌识别事件到MQTT
-	err := h.publishPlateEvent(stationID, &plateResult)
+	// 统一格式化并转发到MQTT
+	event := MqttEvent{
+		"type":        "plate_recognition",
+		"station_id":  stationID,
+		"timestamp":   timestamp,
+		"device_name": alarm.DeviceName,
+		"ipaddr":      alarm.IPAddr,
+		"serialno":    alarm.SerialNo,
+		"plate": map[string]interface{}{
+			"license":        plateResult.License,
+			"confidence":     plateResult.Confidence,
+			"color_type":     plateResult.ColorType,
+			"type":           plateResult.Type,
+			"direction":      plateResult.Direction,
+			"plateid":        plateResult.PlateID,
+			"isoffline":      plateResult.IsOffline,
+			"is_fake_plate":  plateResult.IsFakePlate,
+			"image_file":     plateResult.ImageFile,
+			"image_file_len": plateResult.ImageFileLen,
+			"location":       plateResult.Location.RECT,
+		},
+		"raw": alarm,
+	}
+	err := h.publishToMQTTEvent(stationID, event)
 	if err != nil {
 		log.Printf("发布车牌识别事件失败: %v", err)
 	}
 
-	// 检查是否有待处理的响应（从设备管理器获取）
-	deviceManager := h.manager.GetDeviceManager()
-	if response, exists := deviceManager.GetPendingPlateResponse(stationID); exists {
-		log.Printf("返回门禁响应: 工位=%s", stationID)
-		return response, nil
-	}
-
-	// 默认响应
 	return nil, nil
 }
 
 // processIOTrigger 处理IO触发事件
 func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (interface{}, error) {
 	triggerResult := alarm.Result
+	timestamp := time.Now().Unix()
 
 	log.Printf("IO触发事件: 工位=%s, 源=%d, 值=%d, 设备=%s",
 		stationID, triggerResult.Source, triggerResult.Value, alarm.IPAddr)
 
-	// 发布IO触发事件到MQTT
-	err := h.publishIOEvent(stationID, &triggerResult)
+	event := MqttEvent{
+		"type":        "io_trigger",
+		"station_id":  stationID,
+		"timestamp":   timestamp,
+		"device_name": alarm.DeviceName,
+		"ipaddr":      alarm.IPAddr,
+		"serialno":    alarm.SerialNo,
+		"io": map[string]interface{}{
+			"source": triggerResult.Source,
+			"value":  triggerResult.Value,
+		},
+		"raw": alarm,
+	}
+	err := h.publishToMQTTEvent(stationID, event)
 	if err != nil {
 		log.Printf("发布IO触发事件失败: %v", err)
 	}
@@ -205,11 +289,26 @@ func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (inte
 
 // processSerialData 处理串口数据
 func (h *HTTPServer) processSerialData(stationID string, serialData *SerialData) (interface{}, error) {
+	timestamp := time.Now().Unix()
+
 	log.Printf("收到串口数据: 工位=%s, 通道=%d, 长度=%d",
 		stationID, serialData.SerialChannel, serialData.DataLen)
 
-	// 发布串口数据事件到MQTT
-	err := h.publishSerialEvent(stationID, serialData)
+	event := MqttEvent{
+		"type":        "serial_data",
+		"station_id":  stationID,
+		"timestamp":   timestamp,
+		"device_name": serialData.DeviceName,
+		"ipaddr":      serialData.IPAddr,
+		"serialno":    serialData.SerialNo,
+		"serial": map[string]interface{}{
+			"serial_channel": serialData.SerialChannel,
+			"data":           serialData.Data,
+			"data_len":       serialData.DataLen,
+		},
+		"raw": serialData,
+	}
+	err := h.publishToMQTTEvent(stationID, event)
 	if err != nil {
 		log.Printf("发布串口数据事件失败: %v", err)
 	}
@@ -219,86 +318,27 @@ func (h *HTTPServer) processSerialData(stationID string, serialData *SerialData)
 
 // processTriggerImage 处理截图数据
 func (h *HTTPServer) processTriggerImage(stationID string, triggerImage *TriggerImage) (interface{}, error) {
+	timestamp := time.Now().Unix()
+
 	log.Printf("收到截图数据: 工位=%s, 大小=%d", stationID, triggerImage.ImageFileLen)
 
-	// 发布截图事件到MQTT
-	err := h.publishImageEvent(stationID, triggerImage)
+	event := MqttEvent{
+		"type":       "image_capture",
+		"station_id": stationID,
+		"timestamp":  timestamp,
+		"ipaddr":     triggerImage.IPAddr,
+		"image": map[string]interface{}{
+			"image_file":     triggerImage.ImageFile,
+			"image_file_len": triggerImage.ImageFileLen,
+		},
+		"raw": triggerImage,
+	}
+	err := h.publishToMQTTEvent(stationID, event)
 	if err != nil {
 		log.Printf("发布截图事件失败: %v", err)
 	}
 
 	return nil, nil
-}
-
-// publishPlateEvent 发布车牌识别事件到MQTT
-func (h *HTTPServer) publishPlateEvent(stationID string, plateResult *PlateResultDetail) error {
-	router := h.manager.GetRouter()
-
-	event := map[string]interface{}{
-		"type": "plate_recognition",
-		"data": map[string]interface{}{
-			"license":      plateResult.License,
-			"confidence":   plateResult.Confidence,
-			"color_type":   plateResult.ColorType,
-			"plate_type":   plateResult.Type,
-			"direction":    plateResult.Direction,
-			"plate_id":     plateResult.PlateID,
-			"is_offline":   plateResult.IsOffline,
-			"is_fake":      plateResult.IsFakePlate,
-			"trigger_type": plateResult.TriggerType,
-			"timestamp":    plateResult.TimeStamp.Timeval.Sec,
-			"location":     plateResult.Location,
-		},
-	}
-
-	return router.PublishToMQTT(stationID, "plate_event", event)
-}
-
-// publishIOEvent 发布IO触发事件到MQTT
-func (h *HTTPServer) publishIOEvent(stationID string, triggerResult *TriggerResult) error {
-	router := h.manager.GetRouter()
-
-	event := map[string]interface{}{
-		"type": "io_trigger",
-		"data": map[string]interface{}{
-			"source": triggerResult.Source,
-			"value":  triggerResult.Value,
-		},
-	}
-
-	return router.PublishToMQTT(stationID, "io_event", event)
-}
-
-// publishSerialEvent 发布串口数据事件到MQTT
-func (h *HTTPServer) publishSerialEvent(stationID string, serialData *SerialData) error {
-	router := h.manager.GetRouter()
-
-	event := map[string]interface{}{
-		"type": "serial_data",
-		"data": map[string]interface{}{
-			"channel":        serialData.Channel,
-			"serial_channel": serialData.SerialChannel,
-			"data":           serialData.Data,
-			"data_len":       serialData.DataLen,
-		},
-	}
-
-	return router.PublishToMQTT(stationID, "serial_event", event)
-}
-
-// publishImageEvent 发布截图事件到MQTT
-func (h *HTTPServer) publishImageEvent(stationID string, triggerImage *TriggerImage) error {
-	router := h.manager.GetRouter()
-
-	event := map[string]interface{}{
-		"type": "image_capture",
-		"data": map[string]interface{}{
-			"image_len": triggerImage.ImageFileLen,
-			"ip_addr":   triggerImage.IPAddr,
-		},
-	}
-
-	return router.PublishToMQTT(stationID, "image_event", event)
 }
 
 // publishSnapshotEvent 发布截图上传事件到MQTT
@@ -314,4 +354,16 @@ func (h *HTTPServer) publishSnapshotEvent(stationID string, size int) error {
 	}
 
 	return router.PublishToMQTT(stationID, "snapshot_event", event)
+}
+
+// 统一处理LCD/广告/OSD相关下发和转发
+func (h *HTTPServer) processLCDRelatedMessage(stationID string, msg map[string]interface{}) {
+	timestamp := time.Now().Unix()
+	event := MqttEvent{
+		"type":       "lcd_config",
+		"station_id": stationID,
+		"timestamp":  timestamp,
+		"lcd_config": msg,
+	}
+	h.publishToMQTTEvent(stationID, event)
 }

@@ -489,6 +489,815 @@ name="channel_num"1--------------------------caa771fe4a61f3d9--
 }
 ```
 
+###### 2.6.7 LCD 配置
+
+1. 当开启 comet 轮询之后，相机会一直与 HTTP 服务器进行交互，保持连接请求，相机主动发送设备注册消息，内容与普通心跳内容一致，收到回复时，立即发送下一条消息；
+2. 发送设备注册消息，与普通心跳消息保持一致；
+3. comet 轮询会根据服务器回复做相应处理；
+说明：
+1. 文件下载接口以 HTTP 的方式提供；图片不超过 5MB，视频文件不超过 50MB；资源包整体的大小不超过 100MB；
+
+###### 2.6.7.1 LCD 屏显配置
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息
+
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "type": "set_ad_voice_config", // 操作类型
+        "module": "AD_CONFIG_REQUESTION", // 模块名
+        "reply_url": "", // 回复地址，设备执行操作后，会调用该地址，返回执行结果
+        "body": // 消息对象
+        {
+            "media_voice_time_ctrl": // 媒体音量（可分三个时间段）
+            [
+                {
+                    "time_begin": "00:00:00", // 时间
+                    "time_end": "08:00:00", // 时间
+                    "voice_level": 2 // 音量，0：静音，1：音量 1，2：音量，3：音量 3，4：音量 4，5：音量 5
+                },
+                {
+                    "time_begin": "08:00:00",
+                    "time_end": "17:00:00",
+                    "voice_level": 0
+                },
+                {
+                    "time_begin": "17:00:00",
+                    "time_end": "24:00:00",
+                    "voice_level": 0
+                }
+            ],
+            "led_bright_time_ctrl": // LCD 屏显亮度（可分三个时间段）
+            [
+                {
+                    "time_begin": "00:00:00", // 时间
+                    "time_end": "08:00:00", // 时间
+                    "level": 2 // 亮度，0：熄屏，1：亮度 1，2：亮度 2，3：亮度 3，4：亮度 4，5：亮度 5
+                },
+                {
+                    "time_begin": "08:00:00",
+                    "time_end": "17:00:00",
+                    "level": 2
+                },
+                {
+                    "time_begin": "17:00:00",
+                    "time_end": "24:00:00",
+                    "level": 2
+                }
+            ],
+            "screen_size": 2, // 屏幕尺寸，0：1920*1080，1：1366*768
+            "text_roll_speed": 1, // 文字滚动速度，0：缓慢，1：正常，2：快速
+            "led_bright_mode": 1, // LCD 屏幕亮度模式，0：智能调节，1：手动调节，2：关闭
+            "fan_enable_temprature": 40, // 开启温度
+            "control_mode": 2, // 屏显控制模式，0：软件控制，1：相机控制，2：脱机时相机控制
+            "factory_mode": 0, // 工厂模式，0：关闭
+            "rotate_mode": 1 // 屏幕翻转，0：原始显示，1：上下翻转
+        }
+    }
+}
+```
+
+###### 2.6.7.2 LCD 屏显配置获取
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "type": "get_ad_voice_config", // 操作类型
+        "module": "AD_CONFIG_REQUESTION", // 模块名字
+        "reply_url": "http://192.168.18.55/reply_url" // 推送地址
+    }
+}
+```
+
+返回后，设备会推送2.6.7.1接口的内容
+
+###### 2.6.7.3 半屏配置下发
+
+屏幕配置方式有三种，半屏、全屏、自定义，采用自定义方式时，只能通过压缩包的方式导入；
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "type": "set_ad_config", // 操作类型
+        "module": "AD_CONFIG_REQUESTION", // 模块名字
+        "reply_url": "", // 回复地址
+        "body": // 消息对象
+        {
+            "ad_type": 2,
+            "res_download_path": // 资源（图片、视频）文件下载路径
+            [
+                {
+                    "path": "http://sfsfdsfsds.com/1.png"
+                },
+                {
+                    "path": "http://sfsfdsfsds.com/0_MA2435.jpg"
+                },
+                {
+                    "path": "http://sfsfdsfsds.com/2233_hisi.mp4"
+                },
+                {
+                    "path": "http://sfsfdsfsds.com/iphone1_mp4.mp4"
+                }
+            ],
+            "ad_config":
+            {
+                "ad_source": "local", // 资源位置，填"local"即可；
+                "ad_mode": 2, // 屏显模式，1：全屏，2：半屏
+                "ad_group":
+                {
+                    "group_id": 0,
+                    "scenes":
+                    [
+                        {
+                            "scene_name": "YnVzeV9oYWxm", // 场景名
+                            "scene_id": 0, // 场景 id
+                            "scene_mode": 2, // 场景模式，预留，填 0 即可
+                            "scene_type": "car_out", // 场景类型
+                            "scene_max_duration": 30, // 场景最大播放时长，单位秒
+                            "video_play_count": 2, // 视频播放次数
+                            "background_type": 1, // 背景类型，0：背景色，1：背景图，2：不启用
+                            "background_color": "", // 背景色，eg："#941594"
+                            "background_image": "1.png", // 背景图片名
+                            "scene_pos": // 位置
+                            {
+                                "x": 0, // x 轴坐标
+                                "y": 307, // y 轴坐标
+                                "width": 360, // 宽度
+                                "height": 333 // 高度
+                            },
+                            "scene_info": // 场景资源，文本和视频、图像是不同的数据结构（数组中可能存在不同类型的对象）
+                            {
+                                "elem_list":
+                                [
+                                    {
+                                        "elem_id": 1, // 元素 id
+                                        "elem_enable": 1, // 是否启用
+                                        "elem_name": "dynamic_text1", // 元素名字
+                                        "elem_type": "dynamic_text", // 元素类型 static_pic：静态图片，dynamic_pic： 动态图片，video:视频，static_text：静态文字，dynamic_text：动态文字
+                                        "elem_sub_type": "car_type", // 元素子类型，car_id：车牌号 datetime ： 日 期 时间， car_in_time：入场时间，car_out_time ： 离 场 时 间 ，car_type ： 车 类 型 ，parking_space_left：剩余车位/ ， custom ： 自 定义， fee-qrcode：动态二维码
+                                        "elem_pos": // 位置
+                                        {
+                                            "x": 0, // x 轴坐标
+                                            "y": 47, // y 轴坐标
+                                            "width": 360, // 宽度
+                                            "height": 28 // 高度
+                                        },
+                                        "elem_text_content": "6Z2Z5oCB5paH5pys", // 文字内容
+                                        "elem_bg_color": "rgba(255,255,255,0)", // 背景色
+                                        "elem_fg_color": "#941594", // 文字颜色
+                                        "elem_font_family": 0, // 字体
+                                        "elem_font_bold": 0, // 是否加粗
+                                        "elem_font_size": 28, // 字号
+                                        "elem_align": "center", // 对齐方式
+                                        "extern_text": "", // 扩展文字
+                                        "extern_text_enable": 0 // 是否启用扩展文字
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "scene_name": "ZnJlZV9oYWxm",
+                            "scene_id": 1,
+                            "scene_mode": 2,
+                            "scene_type": "idle",
+                            "scene_max_duration": 30,
+                            "video_play_count": 2,
+                            "background_type": 1,
+                            "background_color": "",
+                            "background_image": "0_MA2435.jpg",
+                            "scene_pos":
+                            {
+                                "x": 0,
+                                "y": 307,
+                                "width": 360,
+                                "height": 333
+                            },
+                            "scene_info":
+                            {
+                                "elem_list": // 图片、视频
+                                [
+                                    {
+                                        "elem_id": 4, // 元素 id
+                                        "elem_enable": 1, // 是否启用
+                                        "elem_name": "dynamic_text4", // 元素名称
+                                        "elem_type": "dynamic_text", // 元素类型 static_pic：静态图片，dynamic_pic： 动态图片，video:视频，static_text：静态文字，dynamic_text：动态文字
+                                        "elem_sub_type": "parking_space_left", // 元素子类型，car_id：车牌号，datetime ： 日 期 时 间 ，car_in_time ： 入 场 时 间 ，car_out_time ： 离 场 时 间 ，car_type ： 车 类 型 ，parking_space_left：剩余车位/ ， custom ： 自 定 义 ，fee-qrcode：动态二维码
+                                        "elem_pos": // 元素字类型
+                                        {
+                                            "x": 0, // x 轴坐标
+                                            "y": 72, // y 轴坐标
+                                            "width": 360, // 宽度
+                                        },
+                                        "elem_text_content": "6Z2Z5oCB5paH5pys",
+                                        "elem_bg_color": "rgba(255,255,255,0)",
+                                        "elem_fg_color": "#ffffff",
+                                        "elem_font_family": 0,
+                                        "elem_font_bold": 0,
+                                        "elem_font_size": 14,
+                                        "elem_align": "center",
+                                        "extern_text": "",
+                                        "extern_text_enable": 1
+                                    },
+                                    {
+                                        "elem_id": 5,
+                                        "elem_enable": 1,
+                                        "elem_name": "dynamic_text5",
+                                        "elem_type": "dynamic_text",
+                                        "elem_sub_type": "parking_space_left",
+                                        "elem_pos":
+                                        {
+                                            "x": 0,
+                                            "y": 159,
+                                            "width": 360,
+                                            "height": 14
+                                        },
+                                        "elem_text_content": "6Z2Z5oCB5paH5pys",
+                                        "elem_bg_color": "rgba(255,255,255,0)",
+                                        "elem_fg_color": "#ffffff",
+                                        "elem_font_family": 0,
+                                        "elem_font_bold": 0,
+                                        "elem_font_size": 14,
+                                        "elem_align": "center",
+                                        "extern_text": "",
+                                        "extern_text_enable": 1
+                                    },
+                                    {
+                                        "elem_id": 6,
+                                        "elem_enable": 1,
+                                        "elem_name": "dynamic_text6",
+                                        "elem_type": "dynamic_text",
+                                        "elem_sub_type": "parking_space_left",
+                                        "elem_pos":
+                                        {
+                                            "x": 0,
+                                            "y": 246,
+                                            "width": 360,
+                                            "height": 14
+                                        },
+                                        "elem_text_content": "",
+                                        "elem_bg_color": "rgba(255,255,255,0)",
+                                        "elem_fg_color": "#d117d1",
+                                        "elem_font_family": 0,
+                                        "elem_font_bold": 0,
+                                        "elem_font_size": 14,
+                                        "elem_align": "center",
+                                        "extern_text": "NjY2",
+                                        "extern_text_enable": 0
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "scene_name": "YWQ=",
+                            "scene_id": 2,
+                            "scene_mode": 1,
+                            "scene_type": "ad",
+                            "scene_max_duration": 30,
+                            "video_play_count": 2,
+                            "background_type": 2,
+                            "background_color": "",
+                            "background_image": "",
+                            "scene_pos":
+                            {
+                                "x": 0,
+                                "y": 0,
+                                "width": 360,
+                                "height": 307
+                            },
+                            "scene_info":
+                            {
+                                "elem_list":
+                                [
+                                    {
+                                        "elem_id": 0,
+                                        "elem_name": "video0",
+                                        "elem_type": "video",
+                                        "elem_pos":
+                                        {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 360,
+                                            "height": 307
+                                        },
+                                        "picture_max_duration": 1,
+                                        "video_play_count": 1,
+                                        "elem_res_list":
+                                        [
+                                            {
+                                                "path": "2233_hisi.mp4"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "elem_id": 1,
+                                        "elem_name": "static_pic1",
+                                        "elem_type": "static_pic",
+                                        "elem_pos":
+                                        {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 360,
+                                            "height": 307
+                                        },
+                                        "picture_max_duration": 10,
+                                        "video_play_count": 10,
+                                        "elem_res_list":
+                                        [
+                                            {
+                                                "path": "89756.jpg"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "elem_id": 2,
+                                        "elem_name": "video2",
+                                        "elem_type": "video",
+                                        "elem_pos":
+                                        {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 360,
+                                            "height": 307
+                                        },
+                                        "picture_max_duration": 1,
+                                        "video_play_count": 1,
+                                        "elem_res_list":
+                                        [
+                                            {
+                                                "path": "lego_hisi.mp4"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "elem_id": 3,
+                                        "elem_name": "video3",
+                                        "elem_type": "video",
+                                        "elem_pos":
+                                        {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 360,
+                                            "height": 307
+                                        },
+                                        "picture_max_duration": 1, // 图片场景最长显示时间，单位秒，范围：3~30
+                                        "video_play_count": 1, // 播放次数，1~10
+                                        "elem_res_list": // 文件路径列表
+                                        [
+                                            {
+                                                "path": "iphone1_mp4.mp4" // 文件路径
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "scene_name": "cXJjb2Rl",
+                            "scene_id": 3,
+                            "scene_mode": 1,
+                            "scene_type": "qr_code",
+                            "scene_max_duration": 30,
+                            "video_play_count": 2,
+                            "background_type": 0,
+                            "background_color": "rgba(255,255,255,1)",
+                            "background_image": "",
+                            "scene_pos":
+                            {
+                                "x": 0,
+                                "y": 0,
+                                "width": 360,
+                                "height": 307
+                            },
+                            "scene_info":
+                            {
+                                "elem_list":
+                                [
+                                    {
+                                        "elem_id": 6,
+                                        "elem_enable": 1,
+                                        "elem_name": "static_pic6",
+                                        "picture_max_duration": 300,
+                                        "elem_type": "dynamic_pic",
+                                        "elem_sub_type": "fee-qrcode",
+                                        "elem_pos":
+                                        {
+                                            "x": 36,
+                                            "y": 10,
+                                            "width": 287,
+                                            "height": 287
+                                        },
+                                        "elem_bg_color": "rgba(255,255,255,0)",
+                                        "elem_res_list":
+                                        [
+                                            {
+                                                "path": ""
+                                            }
+                                        ],
+                                        "elem_res_path": "https://img.zcool.cn/community/015c635a51eafea8012180c5e03fa5.gif"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "ratio": 48
+            }
+        }
+    }
+}
+```
+
+场景名称取值表
+| 场景名 | base64 编码 | 资源数组类型 |
+|--------|-------------|--------------|
+| busy_half | YnVzeV9oYWxm | 文本 |
+| free_half | ZnJlZV9oYWxm | 文本 |
+| ad | YWQ= | 视频、图片 |
+| qrcode | cXJjb2Rl | 图片 |
+
+###### 2.6.7.4 LCD 广告配置获取
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "type": "get_ad_config",
+        "module": "AD_CONFIG_REQUESTION",
+        "reply_url": "",
+        "body":
+        {
+            "ad_type": 2
+        }
+    }
+}
+```
+
+###### 2.6.7.5 全屏配置下发
+
+json 的定义与 2.6.7.3 半屏配置相同，但是包含的场景数组有区别；
+
+| 场景名 | base64 编码 | 资源数组类型 |
+|--------|-------------|--------------|
+| full | ZnVsbA== | 文本+图片 |
+| ad | YWQ= | 视频、图片 |
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+
+###### 2.6.7.6 自定义配置下发
+
+与半屏和全屏下发的区别是，增加了压缩包下发的功能；
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+
+###### 2.6.7.7 控制忙时半屏显示
+
+半屏模式忙时文字只能显示在下半屏，上半屏显示二维码。场景有全屏、半屏，忙时和闲时。两两组合：全屏忙时(full)，全屏闲时(full_ad)，半屏忙时(busy_half)，半屏闲时(free_half)； 后面 4 条都是在广告在页面配置好的条件下进行控制。
+透传数据中的字段，需要和广告配置中的字段一致，才能控制。自定义文字可以配置多个，其他的只能配置一个。
+可以控制的类型包括：car_id 车牌号/ car_in_time 入场时间/car_out_time 离场时间/car_type 车类型/parking_space_left 剩余车位/ custom 自定义/ qrcode_text 二维码。
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "module": "AD_CONFIG_REQUESTION", // 模块名字
+        "type": "ad_push_message", // 操作类型
+        "reply_url": "", // 推送地址
+        "body":
+        {
+            "scene_name": "YnVzeV9oYWxm", // 要控制的场景名称 base64 编码，ZnJlZV9oYWxm(free_half)
+            "custom": // 自定义文字 utf-8 base64,5Ymp5L2Z6L2m5L2NOiAzMA== (剩余车位: 30) 数组跟网页配置一一 对应。比如配置三个就显示前三行
+            [
+                "5Ymp5L2Z6L2m5L2NOiAzMA==",
+                "5Ymp5L2Z6L2m5L2NOiAzMA=="
+            ],
+            "qrcode_text": "https://www.vzicar.com" // 动态二维码
+        }
+    }
+}
+```
+
+回复示例：
+```json
+{
+    "code": 0,
+    "msg": ""
+}
+```
+
+###### 2.6.7.8 控制闲时半屏显示
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "module": "AD_CONFIG_REQUESTION", // 模块名字
+        "type": "ad_push_message", // 操作类型
+        "reply_url": "", // 推送地址
+        "body":
+        {
+            "scene_name": "ZnJlZV9oYWxm", // 要控制的场景名称 base64 编码，ZnJlZV9oYWxm(free_half)
+            "custom": // 自定义文字utf-8base64,5Ymp5L2Z6L2m5L2NOiAzMA==(剩余车位: 30) 数组跟网页配置一一对应。比如配置三个就显示前三行
+            [
+                "5Ymp5L2Z6L2m5L2NOiAzMA==",
+                "5Ymp5L2Z6L2m5L2NOiAzMA=="
+            ]
+        }
+    }
+}
+```
+回复示例：
+```json
+{
+    "code": 0,
+    "msg": ""
+}
+```
+
+###### 2.6.7.9 控制忙时全屏显示
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "module": "AD_CONFIG_REQUESTION",
+        "type": "ad_push_message",
+        "reply_url": "",
+        "body":
+        {
+            "scene_name": "YnVzeV9oYWxm",
+            "parking_space_left":
+            [
+                "5Ymp5L2Z6L2m5L2NOiAzMA==",
+                "5Ymp5L2Z6L2m5L2NOiAzMA=="
+            ],
+            "qrcode_text": "https://www.vzicar.com"
+        }
+    }
+}
+```
+
+###### 2.6.7.10 控制闲时全屏显示
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "module": "AD_CONFIG_REQUESTION",
+        "type": "ad_push_message",
+        "reply_url": "",
+        "body":
+        {
+            "scene_name": " ZnVsbF9hZA=="
+        }
+    }
+}
+```
+
+###### 2.6.8 OSD 配置
+
+###### 2.6.8.1 设置自定义 OSD
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "set_osd_para": "http_set_osd_para", // 操作类型
+        "body":
+        {
+            "osd_type": 1,
+            "user_osd": // 自定义 osd
+            {
+                "user_osd_param": // osd 参数列表
+                [
+                    {
+                        "id": 0, // osd 行数，0~3
+                        "display": 1, // 是否显示，0：不显示，1：显示
+                        "color": 0, // 颜色，0：白，1：红，2：蓝，3：绿
+                        "front_size": 0, // 字体大小
+                        "text": "ZGl5MQ==" // 文 字 的 base64编码（编码前最多 30 个汉字，英文最多 60 个字母）
+                    },
+                    {
+                        "id": 1,
+                        "display": 1,
+                        "color": 0,
+                        "front_size": 1,
+                        "text": "ZGl5Mg=="
+                    },
+                    {
+                        "id": 2,
+                        "display": 1,
+                        "color": 0,
+                        "front_size": 2,
+                        "text": "ZGl5Mw=="
+                    },
+                    {
+                        "id": 3,
+                        "display": 1,
+                        "color": 0,
+                        "front_size": 3,
+                        "text": "ZGl5NA=="
+                    }
+                ],
+                "x_pos": 7, // 左上角横坐标0~100
+                "y_pos": 46 // 左上角纵坐标0~100
+            },
+            "usr_multi_text": // 只有高速版本有效
+            {
+                "color": 0, // 颜色，0：白，1：红，2：蓝，3：绿
+                "front_size": 3, // 字体大小，从小到大 0~3
+                "x_pos": 36,
+                "y_pos": 28,
+                "texts": // 自定义内容数组
+                [
+                    {
+                        "enable": 1, // 是否显示
+                        "context": "ZGl5NS0x" // 文字的base64编码（编码前最多 30 个汉字，英文最多 60 个字母）
+                    },
+                    {
+                        "enable": 1,
+                        "context": "ZGl5NS0y"
+                    },
+                    {
+                        "enable": 1,
+                        "context": "ZGl5NS0z"
+                    },
+                    {
+                        "enable": 0,
+                        "context": "T1NEIFRleHQ="
+                    },
+                    {
+                        "enable": 0,
+                        "context": "T1NEIFRleHQ="
+                    },
+                    {
+                        "enable": 0,
+                        "context": "T1NEIFRleHQ="
+                    },
+                    {
+                        "enable": 0,
+                        "context": "T1NEIFRleHQ="
+                    },
+                    {
+                        "enable": 0,
+                        "context": "T1NEIFRleHQ="
+                    }
+                ]
+            }
+        }
+    }
+}
+```
+
+###### 2.6.8.2 设置图片 OSD
+
+服务器在收到车牌识别结果推送、或者 comet 轮询时，回复以下结构的消息：
+```json
+{
+    "Response_AlarmInfoPlate":
+    {
+        "module": "AVS_PIC_OSD_MODULE", // 模块名字
+        "type": "AVS_SET_PIC_OSD_PRM", // 消息类型
+        "body":
+        {
+            "pos": 2, // 叠加位置，0：图片外上，1：图片外下，2：图片内，3：关闭
+            "font":
+            {
+                "color": 0, // 字体颜色，0：白色，1：红色，2：蓝色，3：绿色
+                "size": 2 // 字体大小，0：16，1：24，2：32，3：48
+            },
+            "separation": 0, // 0：空格；1：竖线（扩张区域显示时生效）
+            "content":
+            [
+                {
+                    "id": 0, // 0：实时结果，1：日期，2：时间，3：地点，4：车辆事件（部分支持），5：车辆类型，6：车标车款，7：车身颜色，8：自定义内容 1，9：自定义内容 2，10：自定义内容 3
+                    "enable": 1,
+                    "x_pos": 2, // 水平位置，0~100
+                    "y_pos": 64, // 垂直位置，0~100
+                    "configJson":
+                    {}
+                },
+                {
+                    "id": 1,
+                    "enable": 1,
+                    "x_pos": 2,
+                    "y_pos": 71,
+                    "configJson":
+                    {
+                        "type": 0 // 与 id 值有关，见示例
+                    }
+                },
+                {
+                    "id": 2,
+                    "enable": 1,
+                    "x_pos": 2,
+                    "y_pos": 86,
+                    "configJson":
+                    {
+                        "type": 0,
+                        "ms_enable": 1 // 精确到毫秒
+                    }
+                },
+                {
+                    "id": 3,
+                    "enable": 1,
+                    "x_pos": 2,
+                    "y_pos": 78,
+                    "configJson":
+                    {
+                        "text": "YWRkcmVzcw==" // 文本的 base64 编码，编码前最多30 个汉字或者 60 个英文
+                    }
+                },
+                {
+                    "id": 4,
+                    "enable": 0,
+                    "x_pos": 0,
+                    "y_pos": 0,
+                    "configJson":
+                    {}
+                },
+                {
+                    "id": 5,
+                    "enable": 1,
+                    "x_pos": 54,
+                    "y_pos": 35,
+                    "configJson":
+                    {}
+                },
+                {
+                    "id": 6,
+                    "enable": 1,
+                    "x_pos": 55,
+                    "y_pos": 52,
+                    "configJson":
+                    {}
+                },
+                {
+                    "id": 7,
+                    "enable": 1,
+                    "x_pos": 55,
+                    "y_pos": 43,
+                    "configJson":
+                    {}
+                },
+                {
+                    "id": 8,
+                    "enable": 1,
+                    "x_pos": 54,
+                    "y_pos": 3,
+                    "configJson":
+                    {
+                        "text": "ZGl5MQ=="
+                    }
+                },
+                {
+                    "id": 9,
+                    "enable": 1,
+                    "x_pos": 54,
+                    "y_pos": 13,
+                    "configJson":
+                    {
+                        "text": "ZGl5Mg=="
+                    }
+                },
+                {
+                    "id": 10,
+                    "enable": 1,
+                    "x_pos": 54,
+                    "y_pos": 22,
+                    "configJson":
+                    {
+                        "text": "ZGl5Mw=="
+                    }
+                }
+            ],
+            "content_order": // 根据 id 排序（扩张区域显示时生效）
+            [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+            ]
+        }
+    }
+}
+```
+
 #### 3、系统码表
 
 ###### 3.1 触发类型数据表

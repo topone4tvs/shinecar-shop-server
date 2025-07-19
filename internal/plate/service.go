@@ -15,7 +15,7 @@ import (
 // Service 门禁服务实现
 type Service struct {
 	config           *config.Config
-	pendingResponses map[string]*Response
+	pendingResponses map[string][]*Response
 	responseMutex    sync.RWMutex
 	deviceStatus     map[string]*service.DeviceStatus
 	statusMutex      sync.RWMutex
@@ -79,7 +79,7 @@ type ContinuePushOffline struct {
 func NewService(cfg *config.Config) *Service {
 	return &Service{
 		config:           cfg,
-		pendingResponses: make(map[string]*Response),
+		pendingResponses: make(map[string][]*Response),
 		deviceStatus:     make(map[string]*service.DeviceStatus),
 	}
 }
@@ -208,7 +208,7 @@ func (s *Service) PrepareResponse(stationID string, response interface{}) error 
 	defer s.responseMutex.Unlock()
 
 	if plateResponse, ok := response.(*Response); ok {
-		s.pendingResponses[stationID] = plateResponse
+		s.pendingResponses[stationID] = append(s.pendingResponses[stationID], plateResponse)
 		log.Printf("准备门禁响应数据: 工位=%s", stationID)
 		return nil
 	}
@@ -221,9 +221,14 @@ func (s *Service) GetPendingResponse(stationID string) (interface{}, bool) {
 	s.responseMutex.Lock()
 	defer s.responseMutex.Unlock()
 
-	if response, exists := s.pendingResponses[stationID]; exists {
-		// 获取后删除，确保只使用一次
-		delete(s.pendingResponses, stationID)
+	responses, exists := s.pendingResponses[stationID]
+	if exists && len(responses) > 0 {
+		response := responses[0]
+		if len(responses) == 1 {
+			delete(s.pendingResponses, stationID)
+		} else {
+			s.pendingResponses[stationID] = responses[1:]
+		}
 		log.Printf("获取门禁响应数据: 工位=%s", stationID)
 		return response, true
 	}
@@ -271,10 +276,12 @@ func (s *Service) ClearPendingResponses() {
 	s.responseMutex.Lock()
 	defer s.responseMutex.Unlock()
 
-	// 这里可以添加超时清理逻辑
-	// 目前简单清空所有待处理响应
-	cleared := len(s.pendingResponses)
-	s.pendingResponses = make(map[string]*Response)
+	cleared := 0
+	for _, responses := range s.pendingResponses {
+		cleared += len(responses)
+	}
+	// 清空所有队列
+	s.pendingResponses = make(map[string][]*Response)
 
 	if cleared > 0 {
 		log.Printf("清理了 %d 个待处理的门禁响应", cleared)

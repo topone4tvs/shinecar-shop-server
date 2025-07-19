@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -77,12 +78,18 @@ func (h *HTTPServer) setupRoutes() {
 		// 门禁设备截图上传端点
 		api.POST("/device/snapshot/:station_id", h.handleSnapshot)
 
+		// GIO推送
+		api.POST("/device/gio/:station_id", h.handleGioMessage)
+
 		// 状态查询端点
 		api.GET("/status", h.getSystemStatus)
 		api.GET("/status/station/:station_id", h.getStationStatus)
 
 		// 测试端点
 		api.POST("/test/mqtt", h.testMQTTPublish)
+
+		// 屏显配置推送
+		api.POST("/display/config/:station_id", h.handleDisplayConfig)
 	}
 
 	log.Printf("HTTP路由已设置，等待服务器初始化...")
@@ -208,18 +215,45 @@ func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 
 	log.Printf("收到设备心跳: 工位=%s, IP=%s", stationID, c.ClientIP())
 
-	// 更新设备状态
+	// 解析 multipart/form-data
+	deviceName := c.PostForm("device_name")
+	ipaddr := c.PostForm("ipaddr")
+	serialno := c.PostForm("serialno")
+	port := c.PostForm("port")
+	userName := c.PostForm("user_name")
+	passWd := c.PostForm("pass_wd")
+	channelNum := c.PostForm("channel_num")
+
+	log.Printf("心跳内容: device_name=%s, ipaddr=%s, serialno=%s, port=%s, user_name=%s, channel_num=%s", deviceName, ipaddr, serialno, port, userName, channelNum)
+
+	// 更新设备状态，优先用心跳体内信息
+	statusData := map[string]interface{}{
+		"ip_address":  ipaddr,
+		"user_agent":  c.GetHeader("User-Agent"),
+		"device_name": deviceName,
+		"serialno":    serialno,
+		"port":        port,
+		"user_name":   userName,
+		"pass_wd":     passWd,
+		"channel_num": channelNum,
+	}
+
 	h.manager.GetDeviceManager().UpdateDeviceStatus(stationID, &service.DeviceStatus{
 		DeviceType: service.DeviceTypePlate,
 		StationID:  stationID,
 		Online:     true,
 		LastSeen:   time.Now(),
 		Status:     "online",
-		Data: map[string]interface{}{
-			"ip_address": c.ClientIP(),
-			"user_agent": c.GetHeader("User-Agent"),
-		},
+		Data:       statusData,
 	})
+
+	// 检查是否有待处理的响应（只在心跳时下发）
+	deviceManager := h.manager.GetDeviceManager()
+	if response, exists := deviceManager.GetPendingPlateResponse(stationID); exists {
+		log.Printf("心跳下发门禁响应: 工位=%s", stationID)
+		c.JSON(http.StatusOK, response)
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
@@ -334,4 +368,67 @@ func corsMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func (h *HTTPServer) handleDisplayConfig(c *gin.Context) {
+	stationID := c.Param("station_id")
+
+	// log记录下完整的请求body，推送内容为json格式
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("读取屏显配置推送失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "读取屏显配置推送失败",
+		})
+		return
+	}
+
+	log.Printf("收到屏显配置推送: 工位=%s, IP=%s, 内容=%s", stationID, c.ClientIP(), string(body))
+
+	// 解析json
+	var displayConfig map[string]interface{}
+	if err := json.Unmarshal(body, &displayConfig); err != nil {
+		log.Printf("解析屏显配置推送失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "解析屏显配置推送失败",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "屏显配置已接收",
+	})
+}
+
+func (h *HTTPServer) handleGioMessage(c *gin.Context) {
+	stationID := c.Param("station_id")
+
+	log.Printf("收到GIO推送: 工位=%s, IP=%s", stationID, c.ClientIP())
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("读取GIO推送失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "读取GIO推送失败",
+		})
+		return
+	}
+
+	// 解析json
+	var gioMessage map[string]interface{}
+	if err := json.Unmarshal(body, &gioMessage); err != nil {
+		log.Printf("解析GIO推送失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "解析GIO推送失败",
+		})
+		return
+	}
+
+	log.Printf("收到GIO推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "GIO推送已接收",
+	})
 }

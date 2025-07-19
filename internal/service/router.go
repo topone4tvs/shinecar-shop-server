@@ -56,11 +56,11 @@ func (r *Router) Stop(ctx context.Context) error {
 
 // subscribeTopics 订阅MQTT主题
 func (r *Router) subscribeTopics() error {
-	// 构建订阅主题模式
-	pattern := fmt.Sprintf("shinecar/shop/%s/station/+", r.config.Shop.ID)
+	// 构建订阅主题模式 - 用于接收上游消息
+	subscribePattern := fmt.Sprintf("shinecar/shop/%s/station/+/command", r.config.Shop.ID)
 
 	// 订阅主题
-	return r.mqttClient.SubscribePattern(pattern, r.handleMQTTMessage)
+	return r.mqttClient.SubscribePattern(subscribePattern, r.handleMQTTMessage)
 }
 
 // handleMQTTMessage 处理MQTT消息
@@ -234,13 +234,13 @@ func (r *Router) updateStationConfig(msg *MQTTMessage) error {
 
 // parseStationID 从主题中解析工位ID
 func (r *Router) parseStationID(topic string) (string, error) {
-	// 主题格式: shinecar/shop/{shop_id}/station/{station_id}
+	// 主题格式: shinecar/shop/{shop_id}/station/{station_id}/command
 	parts := strings.Split(topic, "/")
-	if len(parts) != 5 {
+	if len(parts) != 6 {
 		return "", fmt.Errorf("主题格式错误: %s", topic)
 	}
 
-	if parts[0] != "shinecar" || parts[1] != "shop" || parts[3] != "station" {
+	if parts[0] != "shinecar" || parts[1] != "shop" || parts[3] != "station" || parts[5] != "command" {
 		return "", fmt.Errorf("主题格式错误: %s", topic)
 	}
 
@@ -282,7 +282,8 @@ func (r *Router) validateMessage(msg *MQTTMessage, stationID string) error {
 
 // PublishToMQTT 发布消息到MQTT
 func (r *Router) PublishToMQTT(stationID string, messageType string, data interface{}) error {
-	topic := fmt.Sprintf("shinecar/shop/%s/station/%s", r.config.Shop.ID, stationID)
+	// 构建发布主题 - 用于向上游发送消息
+	topic := fmt.Sprintf("shinecar/shop/%s/station/%s/event", r.config.Shop.ID, stationID)
 
 	// 构建消息
 	var payload []byte

@@ -145,8 +145,8 @@ type MqttEvent map[string]interface{}
 
 func (h *HTTPServer) publishToMQTTEvent(stationID string, event MqttEvent) error {
 	router := h.manager.GetRouter()
-	topic := "device_event" // 可根据需要自定义topic
-	return router.PublishToMQTT(stationID, topic, event)
+	// 使用统一的发布topic格式
+	return router.PublishToMQTT(stationID, "device_event", event)
 }
 
 // parsePlateMessage 解析门禁设备推送消息

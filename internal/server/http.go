@@ -21,6 +21,8 @@ type HTTPServer struct {
 	server  *http.Server
 	router  *gin.Engine
 	manager *service.Manager
+
+	deviceManager *service.DeviceManager
 }
 
 // NewHTTPServer 创建HTTP服务器
@@ -57,6 +59,8 @@ func NewHTTPServer(cfg *config.Config, manager *service.Manager) *HTTPServer {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	httpServer.deviceManager = service.NewDeviceManager(cfg)
+
 	return httpServer
 }
 
@@ -90,6 +94,9 @@ func (h *HTTPServer) setupRoutes() {
 
 		// 屏显配置推送
 		api.POST("/display/config/:station_id", h.handleDisplayConfig)
+
+		// 测试端点
+		api.POST("/device/test/:station_id", h.handleDeviceTest)
 	}
 
 	log.Printf("HTTP路由已设置，等待服务器初始化...")
@@ -167,6 +174,15 @@ func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 		return
 	}
 
+	// 临时返回开门指令
+	c.JSON(http.StatusOK, gin.H{
+		"Response_AlarmInfoPlate": map[string]interface{}{
+			"info": "ok",
+		},
+	})
+	log.Printf("临时返回开门指令: %s", stationID)
+	return
+
 	// 读取请求体
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -216,41 +232,41 @@ func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 	log.Printf("收到设备心跳: 工位=%s, IP=%s", stationID, c.ClientIP())
 
 	// 解析 multipart/form-data
-	deviceName := c.PostForm("device_name")
-	ipaddr := c.PostForm("ipaddr")
-	serialno := c.PostForm("serialno")
-	port := c.PostForm("port")
-	userName := c.PostForm("user_name")
-	passWd := c.PostForm("pass_wd")
-	channelNum := c.PostForm("channel_num")
+	//deviceName := c.PostForm("device_name")
+	//ipaddr := c.PostForm("ipaddr")
+	//serialno := c.PostForm("serialno")
+	//port := c.PostForm("port")
+	//userName := c.PostForm("user_name")
+	//passWd := c.PostForm("pass_wd")
+	//channelNum := c.PostForm("channel_num")
 
-	log.Printf("心跳内容: device_name=%s, ipaddr=%s, serialno=%s, port=%s, user_name=%s, channel_num=%s", deviceName, ipaddr, serialno, port, userName, channelNum)
+	//log.Printf("心跳内容: device_name=%s, ipaddr=%s, serialno=%s, port=%s, user_name=%s, channel_num=%s", deviceName, ipaddr, serialno, port, userName, channelNum)
 
-	// 更新设备状态，优先用心跳体内信息
-	statusData := map[string]interface{}{
-		"ip_address":  ipaddr,
-		"user_agent":  c.GetHeader("User-Agent"),
-		"device_name": deviceName,
-		"serialno":    serialno,
-		"port":        port,
-		"user_name":   userName,
-		"pass_wd":     passWd,
-		"channel_num": channelNum,
-	}
+	//// 更新设备状态，优先用心跳体内信息
+	//statusData := map[string]interface{}{
+	//	"ip_address":  ipaddr,
+	//	"user_agent":  c.GetHeader("User-Agent"),
+	//	"device_name": deviceName,
+	//	"serialno":    serialno,
+	//	"port":        port,
+	//	"user_name":   userName,
+	//	"pass_wd":     passWd,
+	//	"channel_num": channelNum,
+	//}
 
-	h.manager.GetDeviceManager().UpdateDeviceStatus(stationID, &service.DeviceStatus{
-		DeviceType: service.DeviceTypePlate,
-		StationID:  stationID,
-		Online:     true,
-		LastSeen:   time.Now(),
-		Status:     "online",
-		Data:       statusData,
-	})
+	//h.manager.GetDeviceManager().UpdateDeviceStatus(stationID, &service.DeviceStatus{
+	//	DeviceType: service.DeviceTypePlate,
+	//	StationID:  stationID,
+	//	Online:     true,
+	//	LastSeen:   time.Now(),
+	//	Status:     "online",
+	//	Data:       statusData,
+	//})
 
 	// 检查是否有待处理的响应（只在心跳时下发）
-	deviceManager := h.manager.GetDeviceManager()
+	deviceManager := h.deviceManager
 	if response, exists := deviceManager.GetPendingPlateResponse(stationID); exists {
-		log.Printf("心跳下发门禁响应: 工位=%s", stationID)
+		log.Printf("心跳下发门禁响应: 工位=%s 命令=%s", stationID, response)
 		c.JSON(http.StatusOK, response)
 		return
 	}
@@ -430,5 +446,32 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"message": "GIO推送已接收",
+	})
+}
+
+func (h *HTTPServer) handleDeviceTest(c *gin.Context) {
+	stationID := c.Param("station_id")
+
+	ope := c.PostForm("ope")
+	log.Printf("收到设备测试: 工位=%s, IP=%s, 操作=%s", stationID, c.ClientIP(), ope)
+
+	if ope == "open" {
+		cmd := &service.PlateCommand{
+			BaseDeviceCommand: service.BaseDeviceCommand{
+				DeviceType: service.DeviceTypePlate,
+				Command:    service.CommandOpenGate,
+				StationID:  stationID,
+			},
+		}
+		// 调用开门指令
+		h.deviceManager.ExecuteCommand(c.Request.Context(), cmd)
+		log.Printf("调用开门指令: 工位=%s, IP=%s", stationID, c.ClientIP())
+	} else if ope == "close" {
+		log.Printf("收到设备测试: 工位=%s, IP=%s, 操作=关门", stationID, c.ClientIP())
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "设备测试已接收",
 	})
 }

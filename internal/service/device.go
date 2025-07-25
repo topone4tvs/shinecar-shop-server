@@ -88,9 +88,8 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 	switch plateCmd.Command {
 	case CommandOpenGate:
 		dm.setPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
-			"IO": map[string]interface{}{
-				"IONum":    "1",
-				"CtrlType": 1,
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info": "ok",
 			},
 		})
 	case CommandVoicePlay:
@@ -186,7 +185,7 @@ func (dm *DeviceManager) setPendingPlateResponse(stationID string, response inte
 	defer dm.mutex.Unlock()
 
 	dm.plateResponses[stationID] = response
-	log.Printf("设置门禁待处理响应: 工位=%s", stationID)
+	log.Printf("设置门禁待处理响应: 工位=%s 命令=%s", stationID, response)
 }
 
 // GetPendingPlateResponse 获取待处理的门禁响应

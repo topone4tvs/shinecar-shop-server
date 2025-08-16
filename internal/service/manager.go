@@ -10,16 +10,18 @@ import (
 
 // Manager 服务管理器
 type Manager struct {
-	config     *config.Config
-	mqttClient *mqtt.Client
-	router     *Router
+	config        *config.Config
+	mqttClient    *mqtt.Client
+	router        *Router
+	deviceManager *DeviceManager
 }
 
 // NewManager 创建服务管理器
-func NewManager(cfg *config.Config, mqttClient *mqtt.Client) *Manager {
+func NewManager(cfg *config.Config, mqttClient *mqtt.Client, deviceManager *DeviceManager) *Manager {
 	return &Manager{
-		config:     cfg,
-		mqttClient: mqttClient,
+		config:        cfg,
+		mqttClient:    mqttClient,
+		deviceManager: deviceManager,
 	}
 }
 
@@ -27,8 +29,8 @@ func NewManager(cfg *config.Config, mqttClient *mqtt.Client) *Manager {
 func (m *Manager) Start(ctx context.Context) error {
 	log.Println("开始启动服务...")
 
-	// 创建消息路由器
-	m.router = NewRouter(m.config, m.mqttClient)
+	// 创建消息路由器，传入共享的设备管理器
+	m.router = NewRouter(m.config, m.mqttClient, m.deviceManager)
 
 	// 启动消息路由器
 	if err := m.router.Start(ctx); err != nil {
@@ -61,8 +63,5 @@ func (m *Manager) GetRouter() *Router {
 
 // GetDeviceManager 获取设备管理器
 func (m *Manager) GetDeviceManager() *DeviceManager {
-	if m.router != nil {
-		return m.router.GetDeviceManager()
-	}
-	return nil
+	return m.deviceManager
 }

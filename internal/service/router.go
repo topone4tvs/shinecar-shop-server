@@ -21,12 +21,12 @@ type Router struct {
 }
 
 // NewRouter 创建消息路由器
-func NewRouter(cfg *config.Config, mqttClient *mqtt.Client) *Router {
+func NewRouter(cfg *config.Config, mqttClient *mqtt.Client, deviceManager *DeviceManager) *Router {
 	router := &Router{
 		config:        cfg,
 		mqttClient:    mqttClient,
 		converter:     NewMessageConverter(cfg),
-		deviceManager: NewDeviceManager(cfg),
+		deviceManager: deviceManager,
 	}
 
 	return router

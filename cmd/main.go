@@ -56,16 +56,19 @@ func main() {
 
 	log.Println("MQTT连接成功")
 
-	// 创建服务管理器
-	manager := service.NewManager(cfg, mqttClient)
+	// 创建共享的设备管理器实例
+	deviceManager := service.NewDeviceManager(cfg)
 
-	// 创建HTTP服务器
+	// 创建服务管理器，传入共享的设备管理器
+	manager := service.NewManager(cfg, mqttClient, deviceManager)
+
+	// 创建HTTP服务器，传入共享的设备管理器
 	httpServer := server.NewHTTPServer(cfg, manager)
 
 	// 启动所有服务
 	var wg sync.WaitGroup
 
-	// 启动服务管理器
+	// 启动服务管理器（MQTT服务）
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

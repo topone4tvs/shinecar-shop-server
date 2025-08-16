@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"shop_server/config"
@@ -37,7 +39,20 @@ func NewHTTPServer(cfg *config.Config, manager *service.Manager) *HTTPServer {
 	router := gin.New()
 
 	// 添加中间件
-	router.Use(gin.Logger())
+	// 自定义访问日志：仅对心跳接口 /api/device/heartbeat/:station_id 不打印 HTTP 访问日志
+	router.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		if strings.HasPrefix(param.Path, "/api/device/heartbeat/") {
+			return ""
+		}
+		return fmt.Sprintf("%s - [%s] \"%s %s\" %d %s\n",
+			param.ClientIP,
+			param.TimeStamp.Format(time.RFC3339),
+			param.Method,
+			param.Path,
+			param.StatusCode,
+			param.Latency,
+		)
+	}))
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 
@@ -84,6 +99,7 @@ func (h *HTTPServer) setupRoutes() {
 
 		// GIO推送
 		api.POST("/device/gio/:station_id", h.handleGioMessage)
+		api.POST("/device/serio/:station_id", h.handleSerioMessage)
 
 		// 状态查询端点
 		api.GET("/status", h.getSystemStatus)
@@ -174,15 +190,6 @@ func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 		return
 	}
 
-	// 临时返回开门指令
-	c.JSON(http.StatusOK, gin.H{
-		"Response_AlarmInfoPlate": map[string]interface{}{
-			"info": "ok",
-		},
-	})
-	log.Printf("临时返回开门指令: %s", stationID)
-	return
-
 	// 读取请求体
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -230,6 +237,40 @@ func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 	stationID := c.Param("station_id")
 
 	log.Printf("收到设备心跳: 工位=%s, IP=%s", stationID, c.ClientIP())
+
+	//c.JSON(http.StatusOK, gin.H{
+	//	"Response_AlarmInfoPlate": map[string]interface{}{
+	//	},
+	//})
+	//log.Printf("临时返回屏显配置: %s", stationID)
+	//return
+
+	// 临时返回开门指令
+	//c.JSON(http.StatusOK, gin.H{
+	//	"Response_AlarmInfoPlate": map[string]interface{}{
+	//		"TriggerImage": map[string]interface{}{
+	//			"snapImageAbsolutelyUrl": "http://10.31.66.43:8080/api/device/snapshot/002",
+	//		},
+	//		//"info": "ok",
+	//		"serialData": []map[string]interface{}{
+	//			{
+	//				"serialChannel": 0,
+	//				"data":          "q0JCk5M=",
+	//				"dataLen":       5,
+	//			},
+	//		},
+	//		//"type":      "get_ad_voice_config",
+	//		//"module":    "AD_CONFIG_REQUESTION",
+	//		//"reply_url": "http://10.31.66.43:8080/api/display/config/002",
+	//		//"reply_url": "",
+	//		//"body": map[string]interface{}{
+	//		//	"ad_type": 2,
+	//		//	"reply_url": "http://10.31.66.43:8080/api/display/config/002",
+	//		//},
+	//	},
+	//})
+	//log.Printf("临时返回开门指令: %s", stationID)
+	//return
 
 	// 解析 multipart/form-data
 	//deviceName := c.PostForm("device_name")
@@ -289,6 +330,17 @@ func (h *HTTPServer) handleSnapshot(c *gin.Context) {
 		log.Printf("读取截图数据失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取截图数据失败",
+		})
+		return
+	}
+
+	// 把接收到的图片数据存入本地文件中
+	filePath := fmt.Sprintf("snapshot/%s.jpg", stationID)
+	err = os.WriteFile(filePath, body, 0644)
+	if err != nil {
+		log.Printf("保存截图数据失败: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "保存截图数据失败",
 		})
 		return
 	}
@@ -356,7 +408,7 @@ func (h *HTTPServer) testMQTTPublish(c *gin.Context) {
 
 	// 发布测试消息到MQTT
 	router := h.manager.GetRouter()
-	err := router.PublishToMQTT(req.StationID, "test_message", req.Message)
+	err := router.PublishToMQTT(req.StationID, "test_message", "test", req.Message)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "发布MQTT消息失败",
@@ -417,6 +469,38 @@ func (h *HTTPServer) handleDisplayConfig(c *gin.Context) {
 	})
 }
 
+func (h *HTTPServer) handleSerioMessage(c *gin.Context) {
+
+	stationID := c.Param("station_id")
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("读取GIO推送失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "读取GIO推送失败",
+		})
+		return
+	}
+
+	// 解析json
+	var gioMessage map[string]interface{}
+	if err := json.Unmarshal(body, &gioMessage); err != nil {
+		log.Printf("解析GIO推送失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "解析GIO推送失败",
+		})
+		return
+	}
+
+	log.Printf("收到Serio推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"message": "GIO推送已接收",
+	})
+
+}
+
 func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 	stationID := c.Param("station_id")
 
@@ -468,6 +552,8 @@ func (h *HTTPServer) handleDeviceTest(c *gin.Context) {
 		log.Printf("调用开门指令: 工位=%s, IP=%s", stationID, c.ClientIP())
 	} else if ope == "close" {
 		log.Printf("收到设备测试: 工位=%s, IP=%s, 操作=关门", stationID, c.ClientIP())
+	} else if ope == "display" {
+
 	}
 
 	c.JSON(http.StatusOK, gin.H{

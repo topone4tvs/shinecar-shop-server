@@ -1,0 +1,104 @@
+version: '3.9'
+
+services:
+  caddy:
+    image: caddy-alidns-alpine:2.10
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy/data:/data
+      - ./caddy/conf:/config
+      - /data/www:/www:rw
+    environment:
+      - ALICLOUD_ACCESS_KEY=LTAI5tFpWJ1qSWvQHCvLAHva
+      - ALICLOUD_SECRET_KEY=khqcZAXpRJx9miPlMvk1CWNpWMWbvR
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 200M
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  mysql:
+    image: yobasystems/alpine-mariadb:latest
+    container_name: mysql
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_DATABASE=shine_car
+      - MYSQL_USER=shinecar
+      - MYSQL_PASSWORD=secret
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql/my.cnf:/etc/my.cnf
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 300M
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 100M
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    ports:
+      - "8379:6379"
+    volumes:
+      - ./redis:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 200M
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  go-app:
+    image: golang:1.21-alpine
+    container_name: go-app
+    volumes:
+      - /data/www/backend:/go/src/app:rw
+    working_dir: /go/src/app
+    environment:
+      - APP_ENV=online
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 300M
+    networks:
+      - app-network
+    command: ["./shinecar_backend"]
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge

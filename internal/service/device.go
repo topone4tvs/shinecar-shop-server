@@ -34,6 +34,7 @@ type DeviceManager struct {
 	deviceStatus   map[string]*DeviceStatus
 	plateResponses map[string]interface{} // 待处理的门禁响应
 	mutex          sync.RWMutex
+	haService      *HaService
 }
 
 // NewDeviceManager 创建设备管理器
@@ -43,6 +44,7 @@ func NewDeviceManager(cfg *config.Config) *DeviceManager {
 		deviceStatus:   make(map[string]*DeviceStatus),
 		plateResponses: make(map[string]interface{}),
 		mutex:          sync.RWMutex{},
+		haService:      NewHaService(cfg),
 	}
 }
 
@@ -61,6 +63,8 @@ func (dm *DeviceManager) ExecuteCommand(ctx context.Context, cmd DeviceCommand) 
 		return dm.executePlateCommand(ctx, cmd)
 	case DeviceTypeHA:
 		return dm.executeHACommand(ctx, cmd)
+	case DeviceTypeUnion:
+		return dm.executeUnionCommand(ctx, cmd)
 	default:
 		err := fmt.Errorf("不支持的设备类型: %s", cmd.GetDeviceType())
 		return dm.createErrorResponse(cmd, err), nil
@@ -110,6 +114,85 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 		"prepared": true,
 		"command":  plateCmd.Command,
 	}), nil
+}
+
+func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceCommand) (DeviceResponse, error) {
+	unionCmd, ok := cmd.(*UnionCommand)
+	if !ok {
+		err := fmt.Errorf("无效的联动命令类型")
+		return dm.createErrorResponse(cmd, err), nil
+	}
+
+	// 联动命令的处理逻辑
+	log.Printf("准备联动命令响应: %s", unionCmd.Command)
+
+	// 更新设备状态
+	dm.updatePlateDeviceStatus(unionCmd.StationID, true, map[string]interface{}{
+		"last_command": unionCmd.Command,
+		"timestamp":    time.Now().Unix(),
+	})
+
+	switch unionCmd.Command {
+	case CommandUnionStart:
+		// 订单开启后要执行的命令
+		// 1. 开闸
+		// 2. 语音播报 (暂时没有实现)
+		// 3. 截图保存
+		// 4. 工位通电（调用HA命令）
+		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info": "ok",
+			},
+		})
+		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info": "ok",
+			},
+		})
+		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
+		if err != nil {
+			log.Printf("执行联动订单开启命令失败 cmd=%+v, err=%v", unionCmd, err)
+			return dm.createErrorResponse(cmd, err), err
+		}
+	case CommandUnionFinish:
+		// 订单关闭后要执行的命令
+		// 1. 关闸
+		// 2. 工位断电（调用HA命令）
+		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info": "ok",
+			},
+		})
+		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
+		if err != nil {
+			log.Printf("执行联动订单关闭命令失败 cmd=%+v, err=%v", unionCmd, err)
+			return dm.createErrorResponse(cmd, err), err
+		}
+	}
+
+	return dm.createSuccessResponse(cmd, map[string]interface{}{
+		"prepared": true,
+		"command":  unionCmd.Command,
+	}), nil
+}
+
+func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, command string) error {
+	var callCmdErr error
+	switch command {
+	case CommandUnionStart:
+		callCmdErr = dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeStateOn)
+		if callCmdErr == nil {
+			return nil
+		}
+		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOn)
+	case CommandUnionFinish:
+		callCmdErr = dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeStateOff)
+		if callCmdErr == nil {
+			return nil
+		}
+		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOff)
+	}
+	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
 }
 
 // executeHACommand 执行HomeAssistant命令 (简化版本避免导入循环)

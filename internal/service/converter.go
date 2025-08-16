@@ -47,6 +47,8 @@ func (c *DefaultMessageConverter) ConvertToDeviceCommand(msg *MQTTMessage) (Devi
 		return c.createPlateCommand(baseCmd, msg)
 	case DeviceTypeHA:
 		return c.createHACommand(baseCmd, msg)
+	case DeviceTypeUnion:
+		return c.createUnionCommand(baseCmd, msg)
 	default:
 		return baseCmd, nil
 	}
@@ -81,6 +83,8 @@ func (c *DefaultMessageConverter) getDeviceTypeFromCommand(command string) (stri
 		return DeviceTypePlate, nil
 	case CommandHAControl:
 		return DeviceTypeHA, nil
+	case CommandUnionStart, CommandUnionFinish:
+		return DeviceTypeUnion, nil
 	case CommandGetStatus:
 		// 状态查询需要从数据中获取设备类型
 		return "", fmt.Errorf("状态查询命令需要指定设备类型")
@@ -141,6 +145,14 @@ func (c *DefaultMessageConverter) createHACommand(baseCmd *BaseDeviceCommand, ms
 
 	if serviceData, ok := msg.Data["service_data"].(map[string]interface{}); ok {
 		cmd.ServiceData = serviceData
+	}
+
+	return cmd, nil
+}
+
+func (c *DefaultMessageConverter) createUnionCommand(baseCmd *BaseDeviceCommand, msg *MQTTMessage) (DeviceCommand, error) {
+	cmd := &UnionCommand{
+		BaseDeviceCommand: *baseCmd,
 	}
 
 	return cmd, nil
@@ -217,4 +229,8 @@ func (h *HACommand) GetService() string {
 // GetServiceData 获取服务数据
 func (h *HACommand) GetServiceData() map[string]interface{} {
 	return h.ServiceData
+}
+
+type UnionCommand struct {
+	BaseDeviceCommand
 }

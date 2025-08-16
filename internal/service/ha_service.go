@@ -1,4 +1,4 @@
-package ha
+package service
 
 import (
 	"context"
@@ -8,43 +8,51 @@ import (
 	"time"
 
 	"shop_server/config"
-	"shop_server/internal/service"
+	"shop_server/pkg/ha"
+)
+
+const (
+	DeviceOpeTurnOn   = "turn_on"
+	DeviceOpeTurnOff  = "turn_off"
+	DeviceOpeToggle   = "toggle"
+	DeviceOpeStateOn  = "state_on"
+	DeviceOpeStateOff = "state_off"
 )
 
 // Service HomeAssistant服务实现
-type Service struct {
+type HaService struct {
 	config       *config.Config
-	client       *Client
-	deviceStatus map[string]*service.DeviceStatus
+	client       *ha.Client
+	deviceStatus map[string]*DeviceStatus
 	statusMutex  sync.RWMutex
 }
 
 // NewService 创建HomeAssistant服务
-func NewService(cfg *config.Config) *Service {
-	haConfig := &Config{
+func NewHaService(cfg *config.Config) *HaService {
+	haConfig := &ha.Config{
 		BaseURL: cfg.Devices.HA.BaseURL,
 		Token:   cfg.Devices.HA.Token,
 		Timeout: cfg.Devices.HA.Timeout,
 		Headers: cfg.Devices.HA.Headers,
 	}
 
-	return &Service{
+	return &HaService{
 		config:       cfg,
-		client:       NewClient(haConfig),
-		deviceStatus: make(map[string]*service.DeviceStatus),
+		client:       ha.NewClient(haConfig),
+		deviceStatus: make(map[string]*DeviceStatus),
 	}
 }
 
 // GetDeviceType 获取设备类型
-func (s *Service) GetDeviceType() string {
-	return service.DeviceTypeHA
+func (s *HaService) GetDeviceType() string {
+	return DeviceTypeHA
 }
 
 // ExecuteCommand 执行设备命令
-func (s *Service) ExecuteCommand(ctx context.Context, cmd service.DeviceCommand) (service.DeviceResponse, error) {
+func (s *HaService) ExecuteCommand(ctx context.Context, cmd DeviceCommand) (DeviceResponse, error) {
 	log.Printf("执行HomeAssistant命令: %s, 工位=%s", cmd.GetCommand(), cmd.GetStationID())
 
-	haCmd, ok := cmd.(*service.HACommand)
+	haCmd, ok := cmd.(*HACommand)
 	if !ok {
 		return s.createErrorResponse(cmd, fmt.Errorf("无效的HomeAssistant命令类型")), nil
 	}
@@ -53,10 +61,10 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd service.DeviceCommand)
 	var data interface{}
 
 	switch haCmd.Command {
-	case service.CommandHAControl:
+	case CommandHAControl:
 		err = s.CallService(ctx, haCmd.Domain, haCmd.Service, haCmd.EntityID, haCmd.ServiceData)
-	case service.CommandGetStatus:
-		var state *EntityState
+	case CommandGetStatus:
+		var state *ha.EntityState
 		state, err = s.client.GetEntityState(ctx, haCmd.EntityID)
 		if err == nil {
 			data = map[string]interface{}{
@@ -77,7 +85,7 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd service.DeviceCommand)
 }
 
 // GetDeviceStatus 获取设备状态
-func (s *Service) GetDeviceStatus(ctx context.Context, stationID string) (service.DeviceStatus, error) {
+func (s *HaService) GetDeviceStatus(ctx context.Context, stationID string) (DeviceStatus, error) {
 	s.statusMutex.RLock()
 	defer s.statusMutex.RUnlock()
 
@@ -85,11 +93,11 @@ func (s *Service) GetDeviceStatus(ctx context.Context, stationID string) (servic
 		return *status, nil
 	}
 
-	return service.DeviceStatus{}, fmt.Errorf("工位 %s 的HomeAssistant设备状态不存在", stationID)
+	return DeviceStatus{}, fmt.Errorf("工位 %s 的HomeAssistant设备状态不存在", stationID)
 }
 
 // IsHealthy 检查设备健康状态
-func (s *Service) IsHealthy(ctx context.Context) bool {
+func (s *HaService) IsHealthy(ctx context.Context) bool {
 	// 检查与HomeAssistant的连接
 	if err := s.client.CheckHealth(ctx); err != nil {
 		log.Printf("HomeAssistant健康检查失败: %v", err)
@@ -100,7 +108,7 @@ func (s *Service) IsHealthy(ctx context.Context) bool {
 }
 
 // CallService 调用HomeAssistant服务
-func (s *Service) CallService(ctx context.Context, domain, service string, entityID string, data map[string]interface{}) error {
+func (s *HaService) CallService(ctx context.Context, domain, service string, entityID string, data map[string]interface{}) error {
 	log.Printf("调用HomeAssistant服务: %s.%s, 实体: %s", domain, service, entityID)
 
 	err := s.client.CallService(ctx, domain, service, entityID, data)
@@ -115,7 +123,7 @@ func (s *Service) CallService(ctx context.Context, domain, service string, entit
 }
 
 // GetEntityState 获取实体状态
-func (s *Service) GetEntityState(ctx context.Context, entityID string) (interface{}, error) {
+func (s *HaService) GetEntityState(ctx context.Context, entityID string) (interface{}, error) {
 	state, err := s.client.GetEntityState(ctx, entityID)
 	if err != nil {
 		return nil, err
@@ -133,7 +141,7 @@ func (s *Service) GetEntityState(ctx context.Context, entityID string) (interfac
 }
 
 // SetEntityState 设置实体状态
-func (s *Service) SetEntityState(ctx context.Context, entityID string, state interface{}) error {
+func (s *HaService) SetEntityState(ctx context.Context, entityID string, state interface{}) error {
 	err := s.client.SetEntityState(ctx, entityID, state)
 	if err != nil {
 		return err
@@ -145,31 +153,31 @@ func (s *Service) SetEntityState(ctx context.Context, entityID string, state int
 }
 
 // TurnOn 打开设备
-func (s *Service) TurnOn(ctx context.Context, entityID string) error {
+func (s *HaService) TurnOn(ctx context.Context, entityID string) error {
 	return s.client.TurnOn(ctx, entityID)
 }
 
 // TurnOff 关闭设备
-func (s *Service) TurnOff(ctx context.Context, entityID string) error {
+func (s *HaService) TurnOff(ctx context.Context, entityID string) error {
 	return s.client.TurnOff(ctx, entityID)
 }
 
 // Toggle 切换设备状态
-func (s *Service) Toggle(ctx context.Context, entityID string) error {
+func (s *HaService) Toggle(ctx context.Context, entityID string) error {
 	return s.client.Toggle(ctx, entityID)
 }
 
 // IsEntityOn 检查实体是否开启
-func (s *Service) IsEntityOn(ctx context.Context, entityID string) (bool, error) {
+func (s *HaService) IsEntityOn(ctx context.Context, entityID string) (bool, error) {
 	return s.client.IsEntityOn(ctx, entityID)
 }
 
 // GetAllStations 获取所有工位的HomeAssistant状态
-func (s *Service) GetAllStations() map[string]*service.DeviceStatus {
+func (s *HaService) GetAllStations() map[string]*DeviceStatus {
 	s.statusMutex.RLock()
 	defer s.statusMutex.RUnlock()
 
-	result := make(map[string]*service.DeviceStatus)
+	result := make(map[string]*DeviceStatus)
 	for k, v := range s.deviceStatus {
 		result[k] = v
 	}
@@ -178,7 +186,7 @@ func (s *Service) GetAllStations() map[string]*service.DeviceStatus {
 }
 
 // UpdateStationStatus 更新工位状态
-func (s *Service) UpdateStationStatus(ctx context.Context) error {
+func (s *HaService) UpdateStationStatus(ctx context.Context) error {
 	// 遍历所有配置的工位，检查其HomeAssistant实体状态
 	for _, station := range s.config.Shop.Stations {
 		if !station.Devices.HA.Enable {
@@ -206,7 +214,7 @@ func (s *Service) UpdateStationStatus(ctx context.Context) error {
 }
 
 // StartStatusSync 启动状态同步
-func (s *Service) StartStatusSync(ctx context.Context) {
+func (s *HaService) StartStatusSync(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -224,7 +232,7 @@ func (s *Service) StartStatusSync(ctx context.Context) {
 }
 
 // updateDeviceStatusFromEntityID 根据实体ID更新设备状态
-func (s *Service) updateDeviceStatusFromEntityID(entityID string, online bool) {
+func (s *HaService) updateDeviceStatusFromEntityID(entityID string, online bool) {
 	// 根据实体ID找到对应的工位
 	for _, station := range s.config.Shop.Stations {
 		if station.Devices.HA.Enable && station.Devices.HA.EntityID == entityID {
@@ -237,12 +245,12 @@ func (s *Service) updateDeviceStatusFromEntityID(entityID string, online bool) {
 }
 
 // updateDeviceStatus 更新设备状态
-func (s *Service) updateDeviceStatus(stationID string, online bool, data map[string]interface{}) {
+func (s *HaService) updateDeviceStatus(stationID string, online bool, data map[string]interface{}) {
 	s.statusMutex.Lock()
 	defer s.statusMutex.Unlock()
 
-	status := &service.DeviceStatus{
-		DeviceType: service.DeviceTypeHA,
+	status := &DeviceStatus{
+		DeviceType: DeviceTypeHA,
 		StationID:  stationID,
 		Online:     online,
 		LastSeen:   time.Now(),
@@ -259,8 +267,8 @@ func (s *Service) updateDeviceStatus(stationID string, online bool, data map[str
 }
 
 // createSuccessResponse 创建成功响应
-func (s *Service) createSuccessResponse(cmd service.DeviceCommand, data interface{}) service.DeviceResponse {
-	return &service.BaseDeviceResponse{
+func (s *HaService) createSuccessResponse(cmd DeviceCommand, data interface{}) DeviceResponse {
+	return &BaseDeviceResponse{
 		DeviceType: cmd.GetDeviceType(),
 		Command:    cmd.GetCommand(),
 		StationID:  cmd.GetStationID(),
@@ -270,8 +278,8 @@ func (s *Service) createSuccessResponse(cmd service.DeviceCommand, data interfac
 }
 
 // createErrorResponse 创建错误响应
-func (s *Service) createErrorResponse(cmd service.DeviceCommand, err error) service.DeviceResponse {
-	return &service.BaseDeviceResponse{
+func (s *HaService) createErrorResponse(cmd DeviceCommand, err error) DeviceResponse {
+	return &BaseDeviceResponse{
 		DeviceType: cmd.GetDeviceType(),
 		Command:    cmd.GetCommand(),
 		StationID:  cmd.GetStationID(),
@@ -281,7 +289,7 @@ func (s *Service) createErrorResponse(cmd service.DeviceCommand, err error) serv
 }
 
 // GetEntityIDForStation 获取工位对应的实体ID
-func (s *Service) GetEntityIDForStation(stationID string) (string, error) {
+func (s *HaService) GetEntityIDForStation(stationID string) (string, error) {
 	station, err := s.config.GetStationByID(stationID)
 	if err != nil {
 		return "", err
@@ -295,22 +303,38 @@ func (s *Service) GetEntityIDForStation(stationID string) (string, error) {
 }
 
 // ExecuteStationCommand 执行工位相关的HomeAssistant命令
-func (s *Service) ExecuteStationCommand(ctx context.Context, stationID, command string, data map[string]interface{}) error {
+func (s *HaService) ExecuteStationCommand(ctx context.Context, stationID, command string) error {
 	entityID, err := s.GetEntityIDForStation(stationID)
 	if err != nil {
 		return err
 	}
 
 	switch command {
-	case "turn_on":
+	case DeviceOpeTurnOn:
 		return s.TurnOn(ctx, entityID)
-	case "turn_off":
+	case DeviceOpeTurnOff:
 		return s.TurnOff(ctx, entityID)
-	case "toggle":
+	case DeviceOpeToggle:
 		return s.Toggle(ctx, entityID)
+	case DeviceOpeStateOn:
+		state, err := s.client.GetEntityState(ctx, entityID)
+		if err != nil {
+			return err
+		}
+		if state.State == "on" {
+			return nil
+		}
+		return fmt.Errorf("实体状态不是on")
+	case DeviceOpeStateOff:
+		state, err := s.client.GetEntityState(ctx, entityID)
+		if err != nil {
+			return err
+		}
+		if state.State == "off" {
+			return nil
+		}
+		return fmt.Errorf("实体状态不是off")
 	default:
-		// 自定义服务调用
-		domain := s.client.getDomainFromEntityID(entityID)
-		return s.CallService(ctx, domain, command, entityID, data)
+		return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
 	}
 }

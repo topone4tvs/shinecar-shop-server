@@ -143,10 +143,10 @@ type OsdConfig struct {
 // 新增统一MQTT转发方法
 type MqttEvent map[string]interface{}
 
-func (h *HTTPServer) publishToMQTTEvent(stationID string, event MqttEvent) error {
+func (h *HTTPServer) publishToMQTTEvent(stationID, eventType string, event MqttEvent) error {
 	router := h.manager.GetRouter()
 	// 使用统一的发布topic格式
-	return router.PublishToMQTT(stationID, "device_event", event)
+	return router.PublishToMQTT(stationID, "device_event", eventType, event)
 }
 
 // parsePlateMessage 解析门禁设备推送消息
@@ -250,7 +250,7 @@ func (h *HTTPServer) processPlateRecognition(stationID string, alarm *AlarmInfoP
 		},
 		"raw": alarm,
 	}
-	err := h.publishToMQTTEvent(stationID, event)
+	err := h.publishToMQTTEvent(stationID, "plate_recognition", event)
 	if err != nil {
 		log.Printf("发布车牌识别事件失败: %v", err)
 	}
@@ -279,7 +279,7 @@ func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (inte
 		},
 		"raw": alarm,
 	}
-	err := h.publishToMQTTEvent(stationID, event)
+	err := h.publishToMQTTEvent(stationID, "io_trigger", event)
 	if err != nil {
 		log.Printf("发布IO触发事件失败: %v", err)
 	}
@@ -308,7 +308,7 @@ func (h *HTTPServer) processSerialData(stationID string, serialData *SerialData)
 		},
 		"raw": serialData,
 	}
-	err := h.publishToMQTTEvent(stationID, event)
+	err := h.publishToMQTTEvent(stationID, "serial_data", event)
 	if err != nil {
 		log.Printf("发布串口数据事件失败: %v", err)
 	}
@@ -333,7 +333,7 @@ func (h *HTTPServer) processTriggerImage(stationID string, triggerImage *Trigger
 		},
 		"raw": triggerImage,
 	}
-	err := h.publishToMQTTEvent(stationID, event)
+	err := h.publishToMQTTEvent(stationID, "image_capture", event)
 	if err != nil {
 		log.Printf("发布截图事件失败: %v", err)
 	}
@@ -353,7 +353,7 @@ func (h *HTTPServer) publishSnapshotEvent(stationID string, size int) error {
 		},
 	}
 
-	return router.PublishToMQTT(stationID, "snapshot_event", event)
+	return router.PublishToMQTT(stationID, "snapshot_event", "snapshot", event)
 }
 
 // 统一处理LCD/广告/OSD相关下发和转发
@@ -365,5 +365,5 @@ func (h *HTTPServer) processLCDRelatedMessage(stationID string, msg map[string]i
 		"timestamp":  timestamp,
 		"lcd_config": msg,
 	}
-	h.publishToMQTTEvent(stationID, event)
+	h.publishToMQTTEvent(stationID, "lcd_config", event)
 }

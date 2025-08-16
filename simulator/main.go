@@ -25,7 +25,7 @@ func main() {
 	flag.StringVar(&target, "target", "", "目标业务系统URL, 如 http://localhost:8080/api/plate/station/001")
 	flag.StringVar(&mode, "mode", "plate", "推送类型: plate/heartbeat/io")
 	flag.StringVar(&station, "station", "001", "工位ID/设备ID")
-	flag.StringVar(&license, "license", "粤A12345", "车牌号(plate模式)")
+	flag.StringVar(&license, "license", "浙A73J2W", "车牌号(plate模式)")
 	flag.IntVar(&ioSource, "source", 1, "IO触发源(io模式)")
 	flag.IntVar(&ioValue, "value", 1, "IO触发值(io模式)")
 	flag.Parse()
@@ -64,7 +64,7 @@ func pushPlate(target, license string) {
 					"confidence":    95,
 					"colorType":     1,
 					"type":          1,
-					"direction":     0,
+					"direction":     4,
 					"plateid":       12345,
 					"isoffline":     0,
 					"is_fake_plate": 0,

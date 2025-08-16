@@ -25,17 +25,20 @@ const (
 
 // 支持的设备命令
 const (
-	CommandOpenGate  = "open_gate"  // 开闸
-	CommandCloseGate = "close_gate" // 关闸
-	CommandVoicePlay = "voice_play" // 语音播报
-	CommandSnapshot  = "snapshot"   // 截图
-	CommandTrigger   = "trigger"    // 手动触发
-	CommandHAControl = "ha_control" // HomeAssistant控制
-	CommandGetStatus = "get_status" // 获取状态
+	CommandOpenGate    = "open_gate"    // 开闸
+	CommandCloseGate   = "close_gate"   // 关闸
+	CommandVoicePlay   = "voice_play"   // 语音播报
+	CommandSnapshot    = "snapshot"     // 截图
+	CommandTrigger     = "trigger"      // 手动触发
+	CommandHAControl   = "ha_control"   // HomeAssistant控制
+	CommandGetStatus   = "get_status"   // 获取状态
+	CommandUnionStart  = "union_start"  // 联动订单开始
+	CommandUnionFinish = "union_finish" // 联动订单结束
 )
 
-// 设备类型
+// 要操作的设备类型
 const (
+	DeviceTypeUnion = "union" // 联动类型
 	DeviceTypePlate = "plate" // 门禁系统
 	DeviceTypeHA    = "ha"    // HomeAssistant
 )
@@ -189,7 +192,7 @@ func isValidMessageType(msgType string) bool {
 // isValidCommand 检查命令是否有效
 func isValidCommand(command string) bool {
 	switch command {
-	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger, CommandHAControl, CommandGetStatus:
+	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger, CommandHAControl, CommandGetStatus, CommandUnionStart, CommandUnionFinish:
 		return true
 	default:
 		return false

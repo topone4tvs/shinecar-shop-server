@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"shop_server/config"
 	"shop_server/pkg/mqtt"
@@ -57,7 +58,7 @@ func (r *Router) Stop(ctx context.Context) error {
 // subscribeTopics 订阅MQTT主题
 func (r *Router) subscribeTopics() error {
 	// 构建订阅主题模式 - 用于接收上游消息
-	subscribePattern := fmt.Sprintf("shinecar/shop/%s/station/+/command", r.config.Shop.ID)
+	subscribePattern := fmt.Sprintf("shinecar/shop/%s/station/+/command/#", r.config.Shop.ID)
 
 	// 订阅主题
 	return r.mqttClient.SubscribePattern(subscribePattern, r.handleMQTTMessage)
@@ -195,7 +196,7 @@ func (r *Router) publishResponse(response DeviceResponse) error {
 			return err
 		}
 
-		return r.PublishToMQTT(response.GetStationID(), "device_response", responseMsg)
+		return r.PublishToMQTT(response.GetStationID(), "device_response", MessageTypeDevice, responseMsg)
 	}
 
 	return nil
@@ -213,7 +214,7 @@ func (r *Router) publishQueryResult(originalMsg *MQTTMessage, data interface{}) 
 		},
 	}
 
-	return r.PublishToMQTT(originalMsg.StationID, "query_result", responseMsg)
+	return r.PublishToMQTT(originalMsg.StationID, "query_result", MessageTypeQuery, responseMsg)
 }
 
 // reloadConfig 重新加载配置
@@ -281,7 +282,7 @@ func (r *Router) validateMessage(msg *MQTTMessage, stationID string) error {
 }
 
 // PublishToMQTT 发布消息到MQTT
-func (r *Router) PublishToMQTT(stationID string, messageType string, data interface{}) error {
+func (r *Router) PublishToMQTT(stationID, messageType, subType string, data interface{}) error {
 	// 构建发布主题 - 用于向上游发送消息
 	topic := fmt.Sprintf("shinecar/shop/%s/station/%s/event", r.config.Shop.ID, stationID)
 
@@ -296,9 +297,11 @@ func (r *Router) PublishToMQTT(stationID string, messageType string, data interf
 		// 否则构建标准消息格式
 		message := map[string]interface{}{
 			"type":       messageType,
+			"sub_type":   subType,
 			"shop_id":    r.config.Shop.ID,
 			"station_id": stationID,
 			"data":       data,
+			"timestamp":  time.Now().Unix(),
 		}
 		payload, err = json.Marshal(message)
 	}

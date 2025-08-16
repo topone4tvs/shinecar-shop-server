@@ -1,2 +1,4 @@
 .DS_Store
 snapshot/
+bin/
+config/env.yaml

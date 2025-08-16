@@ -19,17 +19,12 @@ func main() {
 	log.Println("启动洗车店智能设备管理系统...")
 
 	// 加载配置
-	env := os.Getenv("ENV")
-	if env == "" {
-		env = "local"
-	}
-
-	cfg, err := config.Load(env)
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 
-	log.Printf("配置加载成功: 店铺=%s, 工位数量=%d", cfg.Shop.Name, len(cfg.Shop.Stations))
+	log.Printf("配置加载成功: 环境=%s, 店铺=%s, 工位数量=%d", cfg.GetEnvironment(), cfg.Shop.Name, len(cfg.Shop.Stations))
 
 	// 创建上下文用于优雅关闭
 	ctx, cancel := context.WithCancel(context.Background())

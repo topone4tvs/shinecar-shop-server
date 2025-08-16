@@ -3,17 +3,17 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Server  ServerConfig  `yaml:"server"`
-	MQTT    MQTTConfig    `yaml:"mqtt"`
-	Shop    ShopConfig    `yaml:"shop"`
-	Devices DevicesConfig `yaml:"devices"`
-	Log     LogConfig     `yaml:"log"`
+	Environment string        `yaml:"environment"` // 新增：当前启动环境
+	Server      ServerConfig  `yaml:"server"`
+	MQTT        MQTTConfig    `yaml:"mqtt"`
+	Shop        ShopConfig    `yaml:"shop"`
+	Devices     DevicesConfig `yaml:"devices"`
+	Log         LogConfig     `yaml:"log"`
 }
 
 type ServerConfig struct {
@@ -77,12 +77,9 @@ type LogConfig struct {
 var globalConfig *Config
 
 // Load 加载配置文件
-func Load(env string) (*Config, error) {
-	if env == "" {
-		env = "local"
-	}
-
-	configFile := fmt.Sprintf("config/env.%s.yaml", env)
+func Load() (*Config, error) {
+	// 固定读取 env.yaml 文件
+	configFile := "config/env.yaml"
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		return nil, fmt.Errorf("配置文件不存在: %s", configFile)
 	}
@@ -111,12 +108,24 @@ func Get() *Config {
 	return globalConfig
 }
 
-// GetConfigPath 获取配置文件路径
+// GetEnvironment 获取当前环境
+func (c *Config) GetEnvironment() string {
+	return c.Environment
+}
+
+// IsDevelopment 判断是否为开发环境
+func (c *Config) IsDevelopment() bool {
+	return c.Environment == "development"
+}
+
+// IsProduction 判断是否为生产环境
+func (c *Config) IsProduction() bool {
+	return c.Environment == "production"
+}
+
+// GetConfigPath 获取配置文件路径 (已废弃，现在使用 env.yaml 文件)
 func GetConfigPath(env string) string {
-	if env == "" {
-		env = "local"
-	}
-	return filepath.Join("config", fmt.Sprintf("env.%s.yaml", env))
+	return "config/env.yaml"
 }
 
 // validateConfig 验证配置

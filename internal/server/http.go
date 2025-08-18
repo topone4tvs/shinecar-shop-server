@@ -108,7 +108,8 @@ func (h *HTTPServer) setupRoutes() {
 		api.POST("/display/config/:station_id", h.handleDisplayConfig)
 
 		// 测试端点
-		api.POST("/device/test/:station_id", h.handleDeviceTest)
+		api.POST("/device/test/:station_id", h.handleDeviceTestOpe)
+		api.POST("/device/other/test/:station_id/:ope", h.handleDeviceTestOpe)
 	}
 
 	log.Printf("HTTP路由已设置，等待服务器初始化...")
@@ -232,7 +233,7 @@ func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 	stationID := c.Param("station_id")
 
-	log.Printf("收到设备心跳: 工位=%s, IP=%s", stationID, c.ClientIP())
+	//log.Printf("收到设备心跳: 工位=%s, IP=%s", stationID, c.ClientIP())
 
 	// 解析 multipart/form-data
 	deviceName := c.PostForm("device_name")
@@ -495,11 +496,24 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 	})
 }
 
-func (h *HTTPServer) handleDeviceTest(c *gin.Context) {
+func (h *HTTPServer) handleDeviceTestOpe(c *gin.Context) {
 	stationID := c.Param("station_id")
+	ope := c.Param("ope")
 
-	ope := c.PostForm("ope")
 	log.Printf("收到设备测试: 工位=%s, IP=%s, 操作=%s", stationID, c.ClientIP(), ope)
+
+	// 读取请求体
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("读取请求体失败: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "读取请求体失败",
+		})
+		return
+	}
+
+	log.Printf("门禁推送内容: %s", string(body))
+	return
 
 	if ope == "open" {
 		cmd := &service.PlateCommand{

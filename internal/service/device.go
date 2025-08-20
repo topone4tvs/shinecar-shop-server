@@ -230,16 +230,16 @@ func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID strin
 // openGate 开门操作
 func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	// 检查门禁状态，如果门已经开启则不需要再次开门
-	if dm.IsGateOpen(stationID) {
-		log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
-		dm.setPendingPlateResponse(stationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info":    "gate_already_open",
-				"message": "闸门已经开启",
-			},
-		})
-		return nil
-	}
+	//if dm.IsGateOpen(stationID) {
+	//	log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+	//	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	//		"Response_AlarmInfoPlate": map[string]interface{}{
+	//			"info":    "gate_already_open",
+	//			"message": "闸门已经开启",
+	//		},
+	//	})
+	//	return nil
+	//}
 
 	// 执行开门指令
 	log.Printf("执行开门指令: 工位=%s", stationID)

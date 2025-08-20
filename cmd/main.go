@@ -16,6 +16,15 @@ import (
 )
 
 func main() {
+
+	// 设置时区为中国标准时间
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		// 如果加载失败，使用系统本地时区
+		loc = time.Local
+	}
+	time.Local = loc
+
 	log.Println("启动洗车店智能设备管理系统...")
 
 	// 加载配置

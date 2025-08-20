@@ -490,6 +490,31 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 
 	log.Printf("收到GIO推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
 
+	// 解析门禁状态数据
+	if alarmGioIn, ok := gioMessage["AlarmGioIn"].(map[string]interface{}); ok {
+		if result, ok := alarmGioIn["result"].(map[string]interface{}); ok {
+			if triggerResult, ok := result["TriggerResult"].(map[string]interface{}); ok {
+				// 直接尝试获取 source 和 value，使用类型断言
+				if source, ok := triggerResult["source"].(float64); ok {
+					if value, ok := triggerResult["value"].(float64); ok {
+						// 更新门禁状态
+						h.manager.GetDeviceManager().UpdateGioStatus(stationID, int(source), int(value))
+
+						// 判断门禁状态
+						isOpen := !(int(source) == 0 && int(value) == 0)
+						statusText := "开启"
+						if !isOpen {
+							statusText = "关闭"
+						}
+
+						log.Printf("门禁状态更新: 工位=%s, 状态=%s, 源=%d, 值=%d",
+							stationID, statusText, int(source), int(value))
+					}
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"message": "GIO推送已接收",

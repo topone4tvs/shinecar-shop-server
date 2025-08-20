@@ -26,6 +26,16 @@ type DeviceStatus struct {
 	LastSeen   time.Time              `json:"last_seen"`
 	Status     string                 `json:"status"`
 	Data       map[string]interface{} `json:"data"`
+	// 门禁状态
+	GioStatus *GioStatus `json:"gio_status,omitempty"`
+}
+
+// GioStatus 门禁状态
+type GioStatus struct {
+	IsOpen     bool      `json:"is_open"`     // 闸门是否开启
+	LastUpdate time.Time `json:"last_update"` // 最后更新时间
+	Source     int       `json:"source"`      // 触发源
+	Value      int       `json:"value"`       // 触发值
 }
 
 // DeviceManager 设备管理器
@@ -91,11 +101,17 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 	// 根据命令类型设置待处理响应
 	switch plateCmd.Command {
 	case CommandOpenGate:
-		dm.setPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info": "ok",
-			},
-		})
+		// 使用抽象的门禁控制方法
+		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandOpenGate); err != nil {
+			log.Printf("执行开门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+	case CommandCloseGate:
+		// 使用抽象的门禁控制方法
+		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandCloseGate); err != nil {
+			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
 	case CommandVoicePlay:
 		dm.setPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
 			"Voice": map[string]interface{}{
@@ -136,33 +152,37 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	case CommandUnionStart:
 		// 订单开启后要执行的命令
 		// 1. 开闸
+		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
+			log.Printf("执行开门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
+		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"TriggerImage": map[string]interface{}{
+					"snapImageRelativeUrl": "/device/snapshot/" + unionCmd.StationID,
+				},
+			},
+		})
+
 		// 4. 工位通电（调用HA命令）
-		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info": "ok",
-			},
-		})
-		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info": "ok",
-			},
-		})
 		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
 		if err != nil {
 			log.Printf("执行联动订单开启命令失败 cmd=%+v, err=%v", unionCmd, err)
 			return dm.createErrorResponse(cmd, err), err
 		}
+
 	case CommandUnionFinish:
 		// 订单关闭后要执行的命令
 		// 1. 关闸
+		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
+			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+
 		// 2. 工位断电（调用HA命令）
-		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info": "ok",
-			},
-		})
 		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
 		if err != nil {
 			log.Printf("执行联动订单关闭命令失败 cmd=%+v, err=%v", unionCmd, err)
@@ -193,6 +213,53 @@ func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, co
 		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOff)
 	}
 	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
+}
+
+// executeGateCommand 执行门禁控制命令
+func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID string, command string) error {
+	switch command {
+	case CommandOpenGate:
+		return dm.openGate(ctx, stationID)
+	case CommandCloseGate:
+		return dm.closeGate(ctx, stationID)
+	default:
+		return fmt.Errorf("不支持的门禁命令: %s", command)
+	}
+}
+
+// openGate 开门操作
+func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
+	// 检查门禁状态，如果门已经开启则不需要再次开门
+	if dm.IsGateOpen(stationID) {
+		log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+		dm.setPendingPlateResponse(stationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info":    "gate_already_open",
+				"message": "闸门已经开启",
+			},
+		})
+		return nil
+	}
+
+	// 执行开门指令
+	log.Printf("执行开门指令: 工位=%s", stationID)
+	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+		"Response_AlarmInfoPlate": map[string]interface{}{
+			"info": "ok",
+		},
+	})
+	return nil
+}
+
+// closeGate 关门操作
+func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error {
+	log.Printf("执行关门指令: 工位=%s", stationID)
+	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+		"Response_AlarmInfoPlate": map[string]interface{}{
+			"info": "ok",
+		},
+	})
+	return nil
 }
 
 // executeHACommand 执行HomeAssistant命令 (简化版本避免导入循环)
@@ -300,12 +367,63 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 		Data:       data,
 	}
 
-	if !online {
-		status.Status = "offline"
+	// 如果已存在状态，保留门禁状态
+	if existingStatus, exists := dm.deviceStatus[stationID]; exists && existingStatus.GioStatus != nil {
+		status.GioStatus = existingStatus.GioStatus
 	}
 
 	dm.deviceStatus[stationID] = status
-	log.Printf("更新门禁设备状态: 工位=%s, 在线=%v", stationID, online)
+	log.Printf("门禁设备状态已更新: 工位=%s, 在线=%t", stationID, online)
+}
+
+// UpdateGioStatus 更新门禁状态
+func (dm *DeviceManager) UpdateGioStatus(stationID string, source int, value int) {
+	dm.mutex.Lock()
+	defer dm.mutex.Unlock()
+
+	// 判断门禁状态：source=0 && value=0 表示门已关闭
+	isOpen := !(source == 0 && value == 0)
+
+	gioStatus := &GioStatus{
+		IsOpen:     isOpen,
+		LastUpdate: time.Now(),
+		Source:     source,
+		Value:      value,
+	}
+
+	// 获取或创建设备状态
+	status, exists := dm.deviceStatus[stationID]
+	if !exists {
+		status = &DeviceStatus{
+			DeviceType: DeviceTypePlate,
+			StationID:  stationID,
+			Online:     true,
+			LastSeen:   time.Now(),
+			Status:     "online",
+			Data:       make(map[string]interface{}),
+		}
+		dm.deviceStatus[stationID] = status
+	}
+
+	status.GioStatus = gioStatus
+	status.LastSeen = time.Now()
+
+	log.Printf("门禁状态已更新: 工位=%s, 开启=%t, 源=%d, 值=%d",
+		stationID, isOpen, source, value)
+}
+
+// IsGateOpen 检查闸门是否开启
+func (dm *DeviceManager) IsGateOpen(stationID string) bool {
+	dm.mutex.RLock()
+	defer dm.mutex.RUnlock()
+
+	status, exists := dm.deviceStatus[stationID]
+	if !exists || status.GioStatus == nil {
+		// 如果没有状态信息，默认认为门是关闭的
+		return false
+	}
+
+	return status.GioStatus.IsOpen
 }
 
 // updateHADeviceStatus 更新HomeAssistant设备状态

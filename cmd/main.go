@@ -90,6 +90,7 @@ func main() {
 	log.Printf("  GET  /                                 - 系统信息")
 	log.Printf("  POST /api/plate/station/{station_id}  - 门禁推送接收")
 	log.Printf("  POST /api/device/heartbeat/{station_id} - 设备心跳")
+	log.Printf("  POST /api/device/gio/{station_id}     - 门禁状态推送")
 	log.Printf("  GET  /api/status                       - 系统状态")
 	log.Printf("  GET  /api/status/station/{station_id}  - 工位状态")
 

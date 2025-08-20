@@ -159,13 +159,13 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
-		dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"TriggerImage": map[string]interface{}{
-					"snapImageRelativeUrl": "/device/snapshot/" + unionCmd.StationID,
-				},
-			},
-		})
+		//dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
+		//	"Response_AlarmInfoPlate": map[string]interface{}{
+		//		"TriggerImage": map[string]interface{}{
+		//			"snapImageRelativeUrl": "/device/snapshot/" + unionCmd.StationID,
+		//		},
+		//	},
+		//})
 
 		// 4. 工位通电（调用HA命令）
 		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
@@ -177,7 +177,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	case CommandUnionFinish:
 		// 订单关闭后要执行的命令
 		// 1. 关闸
-		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
+		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
 			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
@@ -230,16 +230,16 @@ func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID strin
 // openGate 开门操作
 func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	// 检查门禁状态，如果门已经开启则不需要再次开门
-	//if dm.IsGateOpen(stationID) {
-	//	log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
-	//	dm.setPendingPlateResponse(stationID, map[string]interface{}{
-	//		"Response_AlarmInfoPlate": map[string]interface{}{
-	//			"info":    "gate_already_open",
-	//			"message": "闸门已经开启",
-	//		},
-	//	})
-	//	return nil
-	//}
+	if dm.IsGateOpen(stationID) {
+		log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+		dm.setPendingPlateResponse(stationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info":    "gate_already_open",
+				"message": "闸门已经开启",
+			},
+		})
+		return nil
+	}
 
 	// 执行开门指令
 	log.Printf("执行开门指令: 工位=%s", stationID)

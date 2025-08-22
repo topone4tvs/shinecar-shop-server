@@ -26,12 +26,12 @@ type DeviceStatus struct {
 	LastSeen   time.Time              `json:"last_seen"`
 	Status     string                 `json:"status"`
 	Data       map[string]interface{} `json:"data"`
-	// 门禁状态
-	GioStatus *GioStatus `json:"gio_status,omitempty"`
+	// 移除GioStatus字段，门禁状态单独管理
 }
 
 // GioStatus 门禁状态
-type GioStatus struct {
+type GateStatus struct {
+	StationID  string    `json:"station_id"`  // 工位ID
 	IsOpen     bool      `json:"is_open"`     // 闸门是否开启
 	LastUpdate time.Time `json:"last_update"` // 最后更新时间
 	Source     int       `json:"source"`      // 触发源
@@ -41,8 +41,9 @@ type GioStatus struct {
 // DeviceManager 设备管理器
 type DeviceManager struct {
 	config         *config.Config
-	deviceStatus   map[string]*DeviceStatus
-	plateResponses map[string]interface{} // 待处理的门禁响应
+	deviceStatus   map[string]*DeviceStatus // 设备在线状态
+	gateStatus     map[string]*GateStatus   // 门禁状态（独立管理）
+	plateResponses map[string]interface{}   // 待处理的门禁响应
 	mutex          sync.RWMutex
 	haService      *HaService
 }
@@ -52,6 +53,7 @@ func NewDeviceManager(cfg *config.Config) *DeviceManager {
 	return &DeviceManager{
 		config:         cfg,
 		deviceStatus:   make(map[string]*DeviceStatus),
+		gateStatus:     make(map[string]*GateStatus),
 		plateResponses: make(map[string]interface{}),
 		mutex:          sync.RWMutex{},
 		haService:      NewHaService(cfg),
@@ -297,9 +299,24 @@ func (dm *DeviceManager) UpdateDeviceStatus(stationID string, status *DeviceStat
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	dm.deviceStatus[stationID] = status
-	log.Printf("设备状态已更新: 工位=%s, 设备类型=%s, 在线=%t",
-		stationID, status.DeviceType, status.Online)
+	// 检查是否已存在状态，如果存在且设备类型匹配，保留GioStatus
+	existingStatus, exists := dm.deviceStatus[stationID]
+	if exists && existingStatus.DeviceType == status.DeviceType {
+		// 如果已存在，只更新必要的字段
+		existingStatus.Online = status.Online
+		existingStatus.LastSeen = status.LastSeen
+		existingStatus.Status = status.Status
+		if status.Data != nil {
+			existingStatus.Data = status.Data
+		}
+		log.Printf("设备状态已更新: 工位=%s, 在线=%t, 最后心跳=%s",
+			stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
+	} else {
+		// 如果不存在，创建新的状态
+		dm.deviceStatus[stationID] = status
+		log.Printf("设备状态已创建: 工位=%s, 在线=%t, 最后心跳=%s",
+			stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
+	}
 }
 
 // GetDeviceStatus 获取设备状态
@@ -358,58 +375,73 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	status := &DeviceStatus{
-		DeviceType: DeviceTypePlate,
-		StationID:  stationID,
-		Online:     online,
-		LastSeen:   time.Now(),
-		Status:     "online",
-		Data:       data,
-	}
+	// 检查是否已存在状态
+	existingStatus, exists := dm.deviceStatus[stationID]
 
-	// 如果已存在状态，保留门禁状态
-	if existingStatus, exists := dm.deviceStatus[stationID]; exists && existingStatus.GioStatus != nil {
-		status.GioStatus = existingStatus.GioStatus
-	}
+	if exists {
+		// 如果已存在，检查设备类型是否匹配
+		if existingStatus.DeviceType != DeviceTypePlate {
+			log.Printf("updatePlateDeviceStatus: 工位=%s, 设备类型不匹配, 期望=%s, 实际=%s",
+				stationID, DeviceTypePlate, existingStatus.DeviceType)
+			// 如果设备类型不匹配，创建新的门禁设备状态
+			status := &DeviceStatus{
+				DeviceType: DeviceTypePlate,
+				StationID:  stationID,
+				Online:     online,
+				LastSeen:   time.Now(),
+				Status:     "online",
+				Data:       data,
+			}
+			dm.deviceStatus[stationID] = status
+			log.Printf("门禁设备状态已重新创建: 工位=%s, 在线=%t", stationID, online)
+			return
+		}
 
-	dm.deviceStatus[stationID] = status
-	log.Printf("门禁设备状态已更新: 工位=%s, 在线=%t", stationID, online)
+		// 如果已存在且设备类型匹配，只更新必要的字段
+		existingStatus.Online = online
+		existingStatus.LastSeen = time.Now()
+		existingStatus.Status = "online"
+		if data != nil {
+			existingStatus.Data = data
+		}
+		log.Printf("门禁设备状态已更新: 工位=%s, 在线=%t", stationID, online)
+	} else {
+		// 如果不存在，创建新的状态
+		log.Printf("updatePlateDeviceStatus: 工位=%s, 创建新状态", stationID)
+		status := &DeviceStatus{
+			DeviceType: DeviceTypePlate,
+			StationID:  stationID,
+			Online:     online,
+			LastSeen:   time.Now(),
+			Status:     "online",
+			Data:       data,
+		}
+		dm.deviceStatus[stationID] = status
+		log.Printf("门禁设备状态已创建: 工位=%s, 在线=%t", stationID, online)
+	}
 }
 
-// UpdateGioStatus 更新门禁状态
-func (dm *DeviceManager) UpdateGioStatus(stationID string, source int, value int) {
+// UpdateGateStatus 更新门禁状态
+func (dm *DeviceManager) UpdateGateStatus(stationID string, source int, value int) {
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
 	// 判断门禁状态：source=0 && value=0 表示门已关闭
 	isOpen := !(source == 0 && value == 0)
 
-	gioStatus := &GioStatus{
+	// 更新门禁状态
+	gateStatus := &GateStatus{
+		StationID:  stationID,
 		IsOpen:     isOpen,
 		LastUpdate: time.Now(),
 		Source:     source,
 		Value:      value,
 	}
 
-	// 获取或创建设备状态
-	status, exists := dm.deviceStatus[stationID]
-	if !exists {
-		status = &DeviceStatus{
-			DeviceType: DeviceTypePlate,
-			StationID:  stationID,
-			Online:     true,
-			LastSeen:   time.Now(),
-			Status:     "online",
-			Data:       make(map[string]interface{}),
-		}
-		dm.deviceStatus[stationID] = status
-	}
+	dm.gateStatus[stationID] = gateStatus
 
-	status.GioStatus = gioStatus
-	status.LastSeen = time.Now()
-
-	log.Printf("门禁状态已更新: 工位=%s, 开启=%t, 源=%d, 值=%d",
-		stationID, isOpen, source, value)
+	log.Printf("门禁状态已更新: 工位=%s, 开启=%t, 源=%d, 值=%d, 指针=%p",
+		stationID, isOpen, source, value, gateStatus)
 }
 
 // IsGateOpen 检查闸门是否开启
@@ -417,13 +449,15 @@ func (dm *DeviceManager) IsGateOpen(stationID string) bool {
 	dm.mutex.RLock()
 	defer dm.mutex.RUnlock()
 
-	status, exists := dm.deviceStatus[stationID]
-	if !exists || status.GioStatus == nil {
-		// 如果没有状态信息，默认认为门是关闭的
+	gateStatus, exists := dm.gateStatus[stationID]
+	if !exists {
+		log.Printf("IsGateOpen: 工位=%s, 门禁状态不存在", stationID)
 		return false
 	}
 
-	return status.GioStatus.IsOpen
+	log.Printf("IsGateOpen: 工位=%s, 门禁状态=%t, 源=%d, 值=%d",
+		stationID, gateStatus.IsOpen, gateStatus.Source, gateStatus.Value)
+	return gateStatus.IsOpen
 }
 
 // updateHADeviceStatus 更新HomeAssistant设备状态
@@ -502,4 +536,25 @@ func (dm *DeviceManager) createErrorResponse(cmd DeviceCommand, err error) Devic
 		Error:      err,
 		Success:    false,
 	}
+}
+
+// GetGateStatus 获取门禁状态
+func (dm *DeviceManager) GetGateStatus(stationID string) (*GateStatus, bool) {
+	dm.mutex.RLock()
+	defer dm.mutex.RUnlock()
+
+	gateStatus, exists := dm.gateStatus[stationID]
+	return gateStatus, exists
+}
+
+// GetAllGateStatus 获取所有门禁状态
+func (dm *DeviceManager) GetAllGateStatus() map[string]*GateStatus {
+	dm.mutex.RLock()
+	defer dm.mutex.RUnlock()
+
+	result := make(map[string]*GateStatus)
+	for k, v := range dm.gateStatus {
+		result[k] = v
+	}
+	return result
 }

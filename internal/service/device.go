@@ -338,13 +338,11 @@ func (dm *DeviceManager) UpdateDeviceStatus(stationID string, status *DeviceStat
 		if status.Data != nil {
 			existingStatus.Data = status.Data
 		}
-		log.Printf("设备状态已更新: 工位=%s, 在线=%t, 最后心跳=%s",
-			stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
+		//log.Printf("设备状态已更新: 工位=%s, 在线=%t, 最后心跳=%s", stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
 	} else {
 		// 如果不存在，创建新的状态
 		dm.deviceStatus[stationID] = status
-		log.Printf("设备状态已创建: 工位=%s, 在线=%t, 最后心跳=%s",
-			stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
+		log.Printf("设备状态已创建: 工位=%s, 在线=%t, 最后心跳=%s", stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
 	}
 }
 

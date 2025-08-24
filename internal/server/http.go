@@ -233,8 +233,6 @@ func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 	stationID := c.Param("station_id")
 
-	//log.Printf("收到设备心跳: 工位=%s, IP=%s", stationID, c.ClientIP())
-
 	// 解析 multipart/form-data
 	deviceName := c.PostForm("device_name")
 	ipaddr := c.PostForm("ipaddr")
@@ -243,8 +241,6 @@ func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 	userName := c.PostForm("user_name")
 	passWd := c.PostForm("pass_wd")
 	channelNum := c.PostForm("channel_num")
-
-	log.Printf("心跳内容: device_name=%s, ipaddr=%s, serialno=%s, port=%s, user_name=%s, channel_num=%s", deviceName, ipaddr, serialno, port, userName, channelNum)
 
 	// 更新设备状态，优先用心跳体内信息
 	statusData := map[string]interface{}{

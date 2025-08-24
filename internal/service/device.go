@@ -43,7 +43,7 @@ type DeviceManager struct {
 	config         *config.Config
 	deviceStatus   map[string]*DeviceStatus // 设备在线状态
 	gateStatus     map[string]*GateStatus   // 门禁状态（独立管理）
-	plateResponses map[string]interface{}   // 待处理的门禁响应
+	plateResponses map[string][]interface{} // 待处理的门禁响应队列
 	mutex          sync.RWMutex
 	haService      *HaService
 }
@@ -54,7 +54,7 @@ func NewDeviceManager(cfg *config.Config) *DeviceManager {
 		config:         cfg,
 		deviceStatus:   make(map[string]*DeviceStatus),
 		gateStatus:     make(map[string]*GateStatus),
-		plateResponses: make(map[string]interface{}),
+		plateResponses: make(map[string][]interface{}),
 		mutex:          sync.RWMutex{},
 		haService:      NewHaService(cfg),
 	}
@@ -172,7 +172,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	case CommandUnionFinish:
 		// 订单关闭后要执行的命令
 		// 1. 关闸
-		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
+		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
 			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
@@ -218,22 +218,34 @@ func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID strin
 // openGate 开门操作
 func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	// 检查门禁状态，如果门已经开启则不需要再次开门
-	if dm.IsGateOpen(stationID) {
-		log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
-		dm.setPendingPlateResponse(stationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info":    "gate_already_open",
-				"message": "闸门已经开启",
-			},
-		})
-		return nil
-	}
+	//if dm.IsGateOpen(stationID) {
+	//	log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+	//	// 通电指令还是要继续
+	//	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	//		"Response_AlarmInfoPlate": map[string]interface{}{
+	//			"ivs_ioctrl": map[string]interface{}{ // 通电
+	//				"io":    1,
+	//				"value": 1,
+	//			},
+	//		},
+	//	})
+	//	return nil
+	//}
 
 	// 执行开门指令
 	log.Printf("执行开门指令: 工位=%s", stationID)
 	dm.setPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
-			"info": "ok", // 开门
+			"ivs_ioctrl": map[string]interface{}{ // 通电
+				"io":    0,
+				"value": 2,
+				"delay": 2000,
+			},
+		},
+	})
+	// 通电
+	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
 				"io":    1,
 				"value": 1,
@@ -247,19 +259,31 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error {
 	log.Printf("执行关门指令: 工位=%s", stationID)
 	// 检查门禁状态，如果门已经开启则不需要再次开门
-	if dm.IsGateOpen(stationID) {
-		log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
-		dm.setPendingPlateResponse(stationID, map[string]interface{}{
-			"Response_AlarmInfoPlate": map[string]interface{}{
-				"info":    "gate_already_open",
-				"message": "闸门已经开启",
-			},
-		})
-		return nil
-	}
+	//if dm.IsGateOpen(stationID) {
+	//	log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+	//	// 断电指令还是要继续
+	//	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	//		"Response_AlarmInfoPlate": map[string]interface{}{
+	//			"ivs_ioctrl": map[string]interface{}{ // 断电
+	//				"io":    1,
+	//				"value": 0,
+	//			},
+	//		},
+	//	})
+	//	return nil
+	//}
 	dm.setPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
-			"info": "ok", // 开门
+			"ivs_ioctrl": map[string]interface{}{ // 通电
+				"io":    0,
+				"value": 2,
+				"delay": 2000,
+			},
+		},
+	})
+	// 断电
+	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 断电
 				"io":    1,
 				"value": 0,
@@ -356,8 +380,40 @@ func (dm *DeviceManager) setPendingPlateResponse(stationID string, response inte
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	dm.plateResponses[stationID] = response
+	dm.plateResponses[stationID] = append(dm.plateResponses[stationID], response)
 	log.Printf("设置门禁待处理响应: 工位=%s 命令=%s", stationID, response)
+}
+
+// GetPendingPlateResponseCount 获取指定工位待处理响应的数量
+func (dm *DeviceManager) GetPendingPlateResponseCount(stationID string) int {
+	dm.mutex.RLock()
+	defer dm.mutex.RUnlock()
+
+	return len(dm.plateResponses[stationID])
+}
+
+// GetAllPendingPlateResponses 获取指定工位所有待处理的响应（不移除）
+func (dm *DeviceManager) GetAllPendingPlateResponses(stationID string) []interface{} {
+	dm.mutex.RLock()
+	defer dm.mutex.RUnlock()
+
+	if len(dm.plateResponses[stationID]) == 0 {
+		return nil
+	}
+
+	// 返回副本，避免外部修改
+	responses := make([]interface{}, len(dm.plateResponses[stationID]))
+	copy(responses, dm.plateResponses[stationID])
+	return responses
+}
+
+// ClearPendingPlateResponses 清空指定工位的所有待处理响应
+func (dm *DeviceManager) ClearPendingPlateResponses(stationID string) {
+	dm.mutex.Lock()
+	defer dm.mutex.Unlock()
+
+	delete(dm.plateResponses, stationID)
+	log.Printf("清空门禁待处理响应: 工位=%s", stationID)
 }
 
 // GetPendingPlateResponse 获取待处理的门禁响应
@@ -365,14 +421,16 @@ func (dm *DeviceManager) GetPendingPlateResponse(stationID string) (interface{},
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	response, exists := dm.plateResponses[stationID]
-	if exists {
-		// 获取后删除
-		delete(dm.plateResponses, stationID)
-		log.Printf("获取门禁待处理响应: 工位=%s", stationID)
+	if len(dm.plateResponses[stationID]) == 0 {
+		return nil, false
 	}
 
-	return response, exists
+	// 获取并删除队列中的第一个元素
+	response := dm.plateResponses[stationID][0]
+	dm.plateResponses[stationID] = dm.plateResponses[stationID][1:]
+	log.Printf("获取门禁待处理响应: 工位=%s", stationID)
+
+	return response, true
 }
 
 // updatePlateDeviceStatus 更新门禁设备状态

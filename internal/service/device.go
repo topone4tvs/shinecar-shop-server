@@ -247,7 +247,11 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	log.Printf("执行开门指令: 工位=%s", stationID)
 	dm.setPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
-			"info": "ok",
+			"info": "ok", // 开门
+			"ivs_ioctrl": map[string]interface{}{ // 通电
+				"io":    1,
+				"value": 1,
+			},
 		},
 	})
 	return nil
@@ -256,9 +260,24 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 // closeGate 关门操作
 func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error {
 	log.Printf("执行关门指令: 工位=%s", stationID)
+	// 检查门禁状态，如果门已经开启则不需要再次开门
+	if dm.IsGateOpen(stationID) {
+		log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+		dm.setPendingPlateResponse(stationID, map[string]interface{}{
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"info":    "gate_already_open",
+				"message": "闸门已经开启",
+			},
+		})
+		return nil
+	}
 	dm.setPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
-			"info": "ok",
+			"info": "ok", // 开门
+			"ivs_ioctrl": map[string]interface{}{ // 断电
+				"io":    1,
+				"value": 0,
+			},
 		},
 	})
 	return nil

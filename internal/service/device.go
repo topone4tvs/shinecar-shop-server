@@ -169,26 +169,12 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		//	},
 		//})
 
-		// 4. 工位通电（调用HA命令）
-		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
-		if err != nil {
-			log.Printf("执行联动订单开启命令失败 cmd=%+v, err=%v", unionCmd, err)
-			return dm.createErrorResponse(cmd, err), err
-		}
-
 	case CommandUnionFinish:
 		// 订单关闭后要执行的命令
 		// 1. 关闸
 		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
 			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
-		}
-
-		// 2. 工位断电（调用HA命令）
-		err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
-		if err != nil {
-			log.Printf("执行联动订单关闭命令失败 cmd=%+v, err=%v", unionCmd, err)
-			return dm.createErrorResponse(cmd, err), err
 		}
 	}
 

@@ -321,10 +321,10 @@ func (s *HaService) ExecuteStationCommand(ctx context.Context, stationID, comman
 		if err != nil {
 			return err
 		}
-		if state.State == "on" {
+		if state.State == "cool" {
 			return nil
 		}
-		return fmt.Errorf("实体状态不是on")
+		return fmt.Errorf("实体状态不是cool")
 	case DeviceOpeStateOff:
 		state, err := s.client.GetEntityState(ctx, entityID)
 		if err != nil {

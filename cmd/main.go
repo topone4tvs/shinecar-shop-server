@@ -13,6 +13,7 @@ import (
 	"shop_server/internal/server"
 	"shop_server/internal/service"
 	"shop_server/pkg/mqtt"
+	_ "time/tzdata"  // 强制设置时区
 )
 
 func main() {

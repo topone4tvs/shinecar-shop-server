@@ -159,6 +159,9 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 			return dm.createErrorResponse(cmd, err), nil
 		}
 
+		// 2. 打开空调
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
+
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
 		//dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
@@ -176,6 +179,8 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
+		// 2. 关闭空调
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
 	}
 
 	return dm.createSuccessResponse(cmd, map[string]interface{}{

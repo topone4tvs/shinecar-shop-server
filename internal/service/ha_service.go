@@ -321,7 +321,7 @@ func (s *HaService) ExecuteStationCommand(ctx context.Context, stationID, comman
 		if err != nil {
 			return err
 		}
-		if state.State == "cool" {
+		if state.State == "cool" || state.State == "auto" || state.State == "on" {
 			return nil
 		}
 		return fmt.Errorf("实体状态不是cool")

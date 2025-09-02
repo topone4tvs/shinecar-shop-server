@@ -160,7 +160,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 2. 打开空调
-		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
 
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
@@ -180,7 +180,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 			return dm.createErrorResponse(cmd, err), nil
 		}
 		// 2. 关闭空调
-		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
 	}
 
 	return dm.createSuccessResponse(cmd, map[string]interface{}{
@@ -195,13 +195,13 @@ func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, co
 	case CommandUnionStart:
 		callCmdErr = dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeStateOn)
 		if callCmdErr == nil {
-			return nil
+			log.Printf("跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
 		}
 		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOn)
 	case CommandUnionFinish:
 		callCmdErr = dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeStateOff)
 		if callCmdErr == nil {
-			return nil
+			log.Printf("应该可以跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
 		}
 		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOff)
 	}

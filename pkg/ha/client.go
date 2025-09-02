@@ -114,6 +114,7 @@ func (c *Client) GetEntityState(ctx context.Context, entityID string) (*EntitySt
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
+		log.Printf("创建HA请求失败: %v", err)
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 

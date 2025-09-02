@@ -115,13 +115,13 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 			return dm.createErrorResponse(cmd, err), nil
 		}
 	case CommandVoicePlay:
-		dm.setPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
+		dm.SetPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
 			"Voice": map[string]interface{}{
 				"Text": plateCmd.VoiceText,
 			},
 		})
 	case CommandSnapshot:
-		dm.setPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
+		dm.SetPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
 			"Capture": map[string]interface{}{
 				"Enable": true,
 			},
@@ -239,7 +239,7 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 
 	// 执行开门指令
 	log.Printf("执行开门指令: 工位=%s", stationID)
-	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
 				"io":    0,
@@ -249,7 +249,7 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 		},
 	})
 	// 通电
-	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
 				"io":    1,
@@ -277,7 +277,7 @@ func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error 
 	//	})
 	//	return nil
 	//}
-	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
 				"io":    0,
@@ -287,7 +287,7 @@ func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error 
 		},
 	})
 	// 断电
-	dm.setPendingPlateResponse(stationID, map[string]interface{}{
+	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 断电
 				"io":    1,
@@ -378,8 +378,8 @@ func (dm *DeviceManager) GetAllDeviceStatus() map[string]*DeviceStatus {
 	return result
 }
 
-// setPendingPlateResponse 设置待处理的门禁响应
-func (dm *DeviceManager) setPendingPlateResponse(stationID string, response interface{}) {
+// SetPendingPlateResponse 设置待处理的门禁响应
+func (dm *DeviceManager) SetPendingPlateResponse(stationID string, response interface{}) {
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 

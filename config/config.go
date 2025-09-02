@@ -113,6 +113,11 @@ func (c *Config) GetEnvironment() string {
 	return c.Environment
 }
 
+// SetEnvironment 设置当前环境
+func (c *Config) SetEnvironment(env string) {
+	c.Environment = env
+}
+
 // IsDevelopment 判断是否为开发环境
 func (c *Config) IsDevelopment() bool {
 	return c.Environment == "development"

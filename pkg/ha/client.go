@@ -99,12 +99,12 @@ func (c *Client) CallService(ctx context.Context, domain, service string, entity
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("HomeAssistant API调用失败: %s, 响应: %s", resp.Status, string(body))
 	}
 
-	log.Printf("HomeAssistant服务调用成功: %s.%s", domain, service)
+	log.Printf("HomeAssistant服务调用成功: %s.%s resp: %s", domain, service, string(body))
 	return nil
 }
 

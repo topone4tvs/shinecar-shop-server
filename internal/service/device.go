@@ -158,8 +158,13 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 			log.Printf("执行开门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
+		// 2. 通电
+		if err := dm.executePowerCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
+			log.Printf("执行通电指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
 
-		// 2. 打开空调
+		// 3. 打开空调
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
 
 		// 2. 语音播报 (暂时没有实现)
@@ -179,7 +184,13 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
-		// 2. 关闭空调
+		// 2. 断电
+		if err := dm.executePowerCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
+			log.Printf("执行断电指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+
+		// 3. 关闭空调
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
 	}
 
@@ -220,6 +231,42 @@ func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID strin
 	}
 }
 
+func (dm *DeviceManager) executePowerCommand(ctx context.Context, stationID string, command string) error {
+	switch command {
+	case CommandOpenGate:
+		return dm.powerOn(ctx, stationID, command)
+	case CommandCloseGate:
+		return dm.powerOff(ctx, stationID, command)
+	}
+	return nil
+}
+
+func (dm *DeviceManager) powerOn(ctx context.Context, stationID string, command string) error {
+	// 通电
+	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
+		"Response_AlarmInfoPlate": map[string]interface{}{
+			"ivs_ioctrl": map[string]interface{}{ // 通电
+				"io":    1,
+				"value": 1,
+			},
+		},
+	})
+	return nil
+}
+
+func (dm *DeviceManager) powerOff(ctx context.Context, stationID string, command string) error {
+	// 断电
+	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
+		"Response_AlarmInfoPlate": map[string]interface{}{
+			"ivs_ioctrl": map[string]interface{}{ // 断电
+				"io":    1,
+				"value": 0,
+			},
+		},
+	})
+	return nil
+}
+
 // openGate 开门操作
 func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	// 检查门禁状态，如果门已经开启则不需要再次开门
@@ -248,15 +295,7 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 			},
 		},
 	})
-	// 通电
-	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
-		"Response_AlarmInfoPlate": map[string]interface{}{
-			"ivs_ioctrl": map[string]interface{}{ // 通电
-				"io":    1,
-				"value": 1,
-			},
-		},
-	})
+
 	return nil
 }
 
@@ -277,21 +316,13 @@ func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error 
 	//	})
 	//	return nil
 	//}
+	// 关门
 	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
-			"ivs_ioctrl": map[string]interface{}{ // 通电
+			"ivs_ioctrl": map[string]interface{}{
 				"io":    0,
 				"value": 2,
 				"delay": 2000,
-			},
-		},
-	})
-	// 断电
-	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
-		"Response_AlarmInfoPlate": map[string]interface{}{
-			"ivs_ioctrl": map[string]interface{}{ // 断电
-				"io":    1,
-				"value": 0,
 			},
 		},
 	})

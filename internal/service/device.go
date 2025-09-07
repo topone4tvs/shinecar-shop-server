@@ -116,8 +116,14 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 		}
 	case CommandVoicePlay:
 		dm.SetPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
-			"Voice": map[string]interface{}{
-				"Text": plateCmd.VoiceText,
+			"Response_AlarmInfoPlate": map[string]interface{}{
+				"playserver_json_request": map[string]interface{}{
+					"type":           "ps_voice_play",
+					"voice":          "JXU2QjIyJXU4RkNFJXU1MTQ5JXU0RTM0JXU3MTE1JXU4RjY2JXU3NTFGJXU2RDNC",
+					"voice_interval": 0,
+					"voice_volume":   100,
+					"voice_male":     1,
+				},
 			},
 		})
 	case CommandSnapshot:

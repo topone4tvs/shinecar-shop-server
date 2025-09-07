@@ -22,11 +22,11 @@ type HTTPServer struct {
 	config  *config.Config
 	server  *http.Server
 	router  *gin.Engine
-	manager *service.Manager
+	manager service.ManagerInterface
 }
 
 // NewHTTPServer 创建HTTP服务器
-func NewHTTPServer(cfg *config.Config, manager *service.Manager) *HTTPServer {
+func NewHTTPServer(cfg *config.Config, manager service.ManagerInterface) *HTTPServer {
 	// 设置gin模式
 	if cfg.Log.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
@@ -307,8 +307,12 @@ func (h *HTTPServer) handleSnapshot(c *gin.Context) {
 	// 处理截图数据（这里可以保存到文件系统或云存储）
 	log.Printf("收到截图数据: 工位=%s, 大小=%d bytes", stationID, len(body))
 
-	// 发布截图事件到MQTT
-	h.publishSnapshotEvent(stationID, len(body))
+	// 发布截图事件到MQTT（简化模式下跳过）
+	if router := h.manager.GetRouter(); router != nil {
+		h.publishSnapshotEvent(stationID, len(body))
+	} else {
+		log.Printf("截图事件记录: 工位=%s, 大小=%d bytes (MQTT不可用)", stationID, len(body))
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
@@ -365,14 +369,18 @@ func (h *HTTPServer) testMQTTPublish(c *gin.Context) {
 		return
 	}
 
-	// 发布测试消息到MQTT
+	// 发布测试消息到MQTT（简化模式下跳过）
 	router := h.manager.GetRouter()
-	err := router.PublishToMQTT(req.StationID, "test_message", "test", req.Message)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "发布MQTT消息失败",
-		})
-		return
+	if router != nil {
+		err := router.PublishToMQTT(req.StationID, "test_message", "test", req.Message)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "发布MQTT消息失败",
+			})
+			return
+		}
+	} else {
+		log.Printf("测试消息记录: 工位=%s, 消息=%v (MQTT不可用)", req.StationID, req.Message)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -534,7 +542,6 @@ func (h *HTTPServer) handleDeviceTestOpe(c *gin.Context) {
 	}
 
 	log.Printf("门禁推送内容: %s", string(body))
-	return
 
 	if ope == "open" {
 		cmd := &service.PlateCommand{

@@ -1,9 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -66,7 +68,13 @@ func (r *Router) subscribeTopics() error {
 
 // handleMQTTMessage 处理MQTT消息
 func (r *Router) handleMQTTMessage(topic string, payload []byte) error {
-	log.Printf("收到MQTT消息 - 主题: %s, 内容: %s", topic, string(payload))
+
+	body, err := io.ReadAll(bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("读取payload失败: %w", err)
+	}
+
+	log.Printf("收到MQTT消息 - 主题: %s, 内容: %s", topic, string(body))
 
 	// 解析主题，提取工位ID
 	stationID, err := r.parseStationID(topic)

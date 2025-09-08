@@ -62,7 +62,7 @@ func NewDeviceManager(cfg *config.Config) *DeviceManager {
 
 // ExecuteCommand 执行设备命令
 func (dm *DeviceManager) ExecuteCommand(ctx context.Context, cmd DeviceCommand) (DeviceResponse, error) {
-	log.Printf("执行设备命令: %s, 设备类型: %s, 工位: %s", cmd.GetCommand(), cmd.GetDeviceType(), cmd.GetStationID())
+	log.Printf("执行设备命令: %s, 设备类型: %s, 工位: %s, raw:%+v", cmd.GetCommand(), cmd.GetDeviceType(), cmd.GetStationID(), cmd)
 
 	// 验证命令
 	if err := cmd.Validate(); err != nil {

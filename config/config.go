@@ -53,8 +53,10 @@ type PlateDeviceConfig struct {
 }
 
 type HADeviceConfig struct {
-	Enable   bool   `yaml:"enable"`
-	EntityID string `yaml:"entity_id"`
+	Enable         bool   `yaml:"enable"`
+	EntityID       string `yaml:"entity_id"`
+	AirConditioner string `yaml:"air_conditioner"` // 空调设备ID
+	Player         string `yaml:"player"`          // 播放器的设备ID
 }
 
 type DevicesConfig struct {

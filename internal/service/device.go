@@ -171,7 +171,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 打开空调
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart)
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
@@ -197,7 +197,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 关闭空调
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish)
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
 	}
 
 	return dm.createSuccessResponse(cmd, map[string]interface{}{
@@ -206,21 +206,27 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	}), nil
 }
 
-func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, command string) error {
+func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, command string, haCmd *HACommand) error {
 	var callCmdErr error
 	switch command {
 	case CommandUnionStart:
-		callCmdErr = dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeStateOn)
+		callCmdErr = dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeStateOn)
 		if callCmdErr == nil {
 			log.Printf("跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
 		}
-		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOn)
+		return dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeTurnOn)
 	case CommandUnionFinish:
-		callCmdErr = dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeStateOff)
+		callCmdErr = dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeStateOff)
 		if callCmdErr == nil {
 			log.Printf("应该可以跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
 		}
-		return dm.haService.ExecuteStationCommand(ctx, stationID, DeviceOpeTurnOff)
+		return dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeTurnOff)
+	case CommandHANotice:
+		playText := haCmd.PlayText
+		if playText != "" {
+			log.Printf("执行HomeAssistant voice播放命令: %s, 工位=%s, 文本=%s", command, stationID, playText)
+			return dm.haService.ExecutePlayerCommand(ctx, stationID, DeviceOpePlayText, playText)
+		}
 	}
 	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
 }
@@ -354,6 +360,12 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 		"domain":       haCmd.Domain,
 		"service":      haCmd.Service,
 	})
+
+	// 根据命令类型设置待处理响应
+	switch haCmd.Command {
+	case CommandHANotice:
+		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
+	}
 
 	responseData := map[string]interface{}{
 		"prepared":  true,

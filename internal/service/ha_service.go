@@ -12,11 +12,13 @@ import (
 )
 
 const (
-	DeviceOpeTurnOn   = "turn_on"
-	DeviceOpeTurnOff  = "turn_off"
-	DeviceOpeToggle   = "toggle"
-	DeviceOpeStateOn  = "state_on"
-	DeviceOpeStateOff = "state_off"
+	DeviceOpeTurnOn    = "turn_on"
+	DeviceOpeTurnOff   = "turn_off"
+	DeviceOpeToggle    = "toggle"
+	DeviceOpeStateOn   = "state_on"
+	DeviceOpeStateOff  = "state_off"
+	DeviceOpePlayVoice = "play_voice"
+	DeviceOpePlayText  = "play_text"
 )
 
 // Service HomeAssistant服务实现
@@ -167,6 +169,16 @@ func (s *HaService) Toggle(ctx context.Context, entityID string) error {
 	return s.client.Toggle(ctx, entityID)
 }
 
+// PlayVoice 播放语音
+func (s *HaService) PlayVoice(ctx context.Context, entityID string) error {
+	return s.client.PlayVoice(ctx, entityID)
+}
+
+// PlayText 播放文本
+func (s *HaService) PlayText(ctx context.Context, entityID string, text string) error {
+	return s.client.PlayText(ctx, entityID, text)
+}
+
 // IsEntityOn 检查实体是否开启
 func (s *HaService) IsEntityOn(ctx context.Context, entityID string) (bool, error) {
 	return s.client.IsEntityOn(ctx, entityID)
@@ -288,8 +300,8 @@ func (s *HaService) createErrorResponse(cmd DeviceCommand, err error) DeviceResp
 	}
 }
 
-// GetEntityIDForStation 获取工位对应的实体ID
-func (s *HaService) GetEntityIDForStation(stationID string) (string, error) {
+// GetEntityIDForAirConditioner 获取工位对应的实体ID
+func (s *HaService) GetEntityIDForAirConditioner(stationID string) (string, error) {
 	station, err := s.config.GetStationByID(stationID)
 	if err != nil {
 		return "", err
@@ -299,12 +311,38 @@ func (s *HaService) GetEntityIDForStation(stationID string) (string, error) {
 		return "", fmt.Errorf("工位 %s 的HomeAssistant设备未启用", stationID)
 	}
 
-	return station.Devices.HA.EntityID, nil
+	return station.Devices.HA.AirConditioner, nil
 }
 
-// ExecuteStationCommand 执行工位相关的HomeAssistant命令
-func (s *HaService) ExecuteStationCommand(ctx context.Context, stationID, command string) error {
-	entityID, err := s.GetEntityIDForStation(stationID)
+func (s *HaService) GetEntityIDForPlayer(stationID string) (string, error) {
+	station, err := s.config.GetStationByID(stationID)
+	if err != nil {
+		return "", err
+	}
+
+	if !station.Devices.HA.Enable {
+		return "", fmt.Errorf("工位 %s 的HomeAssistant设备未启用", stationID)
+	}
+
+	return station.Devices.HA.Player, nil
+}
+
+func (s *HaService) ExecutePlayerCommand(ctx context.Context, stationID, command string, text string) error {
+	entityID, err := s.GetEntityIDForPlayer(stationID)
+	if err != nil {
+		return err
+	}
+
+	switch command {
+	case DeviceOpePlayText:
+		return s.PlayText(ctx, entityID, text)
+	}
+	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
+}
+
+// ExecuteAirConditionerCommand 执行工位相关的HomeAssistant命令
+func (s *HaService) ExecuteAirConditionerCommand(ctx context.Context, stationID, command string) error {
+	entityID, err := s.GetEntityIDForAirConditioner(stationID)
 	if err != nil {
 		return err
 	}

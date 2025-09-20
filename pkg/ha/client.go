@@ -253,6 +253,18 @@ func (c *Client) Toggle(ctx context.Context, entityID string) error {
 	return c.CallService(ctx, domain, "toggle", entityID, nil)
 }
 
+func (c *Client) PlayVoice(ctx context.Context, entityID string) error {
+	domain := c.getDomainFromEntityID(entityID)
+	return c.CallService(ctx, domain, "play_voice", entityID, nil)
+}
+
+func (c *Client) PlayText(ctx context.Context, entityID string, text string) error {
+	domain := c.getDomainFromEntityID(entityID)
+	return c.CallService(ctx, domain, "set_value", entityID, map[string]interface{}{
+		"value": text,
+	})
+}
+
 // setHeaders 设置请求头
 func (c *Client) setHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+c.token)

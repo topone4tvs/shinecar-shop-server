@@ -31,6 +31,7 @@ const (
 	CommandSnapshot    = "snapshot"     // 截图
 	CommandTrigger     = "trigger"      // 手动触发
 	CommandHAControl   = "ha_control"   // HomeAssistant控制
+	CommandHANotice    = "ha_notice"    // HomeAssistant通知
 	CommandGetStatus   = "get_status"   // 获取状态
 	CommandUnionStart  = "union_start"  // 联动订单开始
 	CommandUnionFinish = "union_finish" // 联动订单结束
@@ -192,7 +193,8 @@ func isValidMessageType(msgType string) bool {
 // isValidCommand 检查命令是否有效
 func isValidCommand(command string) bool {
 	switch command {
-	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger, CommandHAControl, CommandGetStatus, CommandUnionStart, CommandUnionFinish:
+	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger,
+		CommandHAControl, CommandHANotice, CommandGetStatus, CommandUnionStart, CommandUnionFinish:
 		return true
 	default:
 		return false

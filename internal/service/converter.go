@@ -81,7 +81,7 @@ func (c *DefaultMessageConverter) getDeviceTypeFromCommand(command string) (stri
 	switch command {
 	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger:
 		return DeviceTypePlate, nil
-	case CommandHAControl:
+	case CommandHAControl, CommandHANotice:
 		return DeviceTypeHA, nil
 	case CommandUnionStart, CommandUnionFinish:
 		return DeviceTypeUnion, nil
@@ -147,6 +147,10 @@ func (c *DefaultMessageConverter) createHACommand(baseCmd *BaseDeviceCommand, ms
 		cmd.ServiceData = serviceData
 	}
 
+	if playText, ok := msg.Data["play_text"].(string); ok {
+		cmd.PlayText = playText
+	}
+
 	return cmd, nil
 }
 
@@ -184,6 +188,7 @@ func (p *PlateCommand) Validate() error {
 // HACommand HomeAssistant命令
 type HACommand struct {
 	BaseDeviceCommand
+	PlayText    string                 `json:"play_text,omitempty"` // 播放文本
 	EntityID    string                 `json:"entity_id"`
 	Domain      string                 `json:"domain"`
 	Service     string                 `json:"service"`

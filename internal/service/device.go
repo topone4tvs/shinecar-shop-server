@@ -171,7 +171,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 打开空调
-		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
@@ -197,7 +197,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 关闭空调
-		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
 	}
 
 	return dm.createSuccessResponse(cmd, map[string]interface{}{

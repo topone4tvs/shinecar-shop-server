@@ -379,7 +379,7 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 	// 根据命令类型设置待处理响应
 	switch haCmd.Command {
 	case CommandHANotice:
-		haCmd.PlayVolume = 1
+		haCmd.PlayVolume = 1.0
 		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
 		haCmd.PlayVolume = 0.45

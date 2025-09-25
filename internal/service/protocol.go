@@ -25,16 +25,19 @@ const (
 
 // 支持的设备命令
 const (
-	CommandOpenGate    = "open_gate"    // 开闸
-	CommandCloseGate   = "close_gate"   // 关闸
-	CommandVoicePlay   = "voice_play"   // 语音播报
-	CommandSnapshot    = "snapshot"     // 截图
-	CommandTrigger     = "trigger"      // 手动触发
-	CommandHAControl   = "ha_control"   // HomeAssistant控制
-	CommandHANotice    = "ha_notice"    // HomeAssistant通知
-	CommandGetStatus   = "get_status"   // 获取状态
-	CommandUnionStart  = "union_start"  // 联动订单开始
-	CommandUnionFinish = "union_finish" // 联动订单结束
+	CommandOpenGate     = "open_gate"      // 开闸
+	CommandCloseGate    = "close_gate"     // 关闸
+	CommandVoicePlay    = "voice_play"     // 语音播报
+	CommandSnapshot     = "snapshot"       // 截图
+	CommandTrigger      = "trigger"        // 手动触发
+	CommandHAControl    = "ha_control"     // HomeAssistant控制
+	CommandHANotice     = "ha_notice"      // HomeAssistant通知
+	CommandHAPlayMusic  = "ha_play_music"  // HomeAssistant通知
+	CommandHAPauseMusic = "ha_pause_music" // HomeAssistant通知
+	CommandHASetVolume  = "ha_set_volume"  // HomeAssistant通知
+	CommandGetStatus    = "get_status"     // 获取状态
+	CommandUnionStart   = "union_start"    // 联动订单开始
+	CommandUnionFinish  = "union_finish"   // 联动订单结束
 )
 
 // 要操作的设备类型

@@ -265,6 +265,23 @@ func (c *Client) PlayText(ctx context.Context, entityID string, text string) err
 	})
 }
 
+func (c *Client) PlayMusic(ctx context.Context, entityID string) error {
+	domain := c.getDomainFromEntityID(entityID)
+	return c.CallService(ctx, domain, "press", entityID, nil)
+}
+
+func (c *Client) PauseMusic(ctx context.Context, entityID string) error {
+	domain := c.getDomainFromEntityID(entityID)
+	return c.CallService(ctx, domain, "media_pause", entityID, nil)
+}
+
+func (c *Client) SetVolume(ctx context.Context, entityID string, volume float32) error {
+	domain := c.getDomainFromEntityID(entityID)
+	return c.CallService(ctx, domain, "volume_set", entityID, map[string]interface{}{
+		"volume_level": volume,
+	})
+}
+
 // setHeaders 设置请求头
 func (c *Client) setHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+c.token)

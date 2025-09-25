@@ -12,13 +12,16 @@ import (
 )
 
 const (
-	DeviceOpeTurnOn    = "turn_on"
-	DeviceOpeTurnOff   = "turn_off"
-	DeviceOpeToggle    = "toggle"
-	DeviceOpeStateOn   = "state_on"
-	DeviceOpeStateOff  = "state_off"
-	DeviceOpePlayVoice = "play_voice"
-	DeviceOpePlayText  = "play_text"
+	DeviceOpeTurnOn     = "turn_on"
+	DeviceOpeTurnOff    = "turn_off"
+	DeviceOpeToggle     = "toggle"
+	DeviceOpeStateOn    = "state_on"
+	DeviceOpeStateOff   = "state_off"
+	DeviceOpePlayVoice  = "play_voice"
+	DeviceOpePlayText   = "play_text"
+	DeviceOpePlayMusic  = "play_music"
+	DeviceOpePauseMusic = "pause_music"
+	DeviceOpeSetVolume  = "set_volume"
 )
 
 // Service HomeAssistant服务实现
@@ -179,6 +182,18 @@ func (s *HaService) PlayText(ctx context.Context, entityID string, text string) 
 	return s.client.PlayText(ctx, entityID, text)
 }
 
+func (s *HaService) PlayMusic(ctx context.Context, entityID string) error {
+	return s.client.PlayMusic(ctx, entityID)
+}
+
+func (s *HaService) PauseMusic(ctx context.Context, entityID string) error {
+	return s.client.PauseMusic(ctx, entityID)
+}
+
+func (s *HaService) SetVolume(ctx context.Context, entityID string, volume float32) error {
+	return s.client.SetVolume(ctx, entityID, volume)
+}
+
 // IsEntityOn 检查实体是否开启
 func (s *HaService) IsEntityOn(ctx context.Context, entityID string) (bool, error) {
 	return s.client.IsEntityOn(ctx, entityID)
@@ -327,15 +342,59 @@ func (s *HaService) GetEntityIDForPlayer(stationID string) (string, error) {
 	return station.Devices.HA.Player, nil
 }
 
-func (s *HaService) ExecutePlayerCommand(ctx context.Context, stationID, command string, text string) error {
+func (s *HaService) GetEntityIDForSpeaker(stationID string) (string, error) {
+	station, err := s.config.GetStationByID(stationID)
+	if err != nil {
+		return "", err
+	}
+	if !station.Devices.HA.Enable {
+		return "", fmt.Errorf("工位 %s 的HomeAssistant设备未启用", stationID)
+	}
+	return station.Devices.HA.Speaker, nil
+}
+
+func (s *HaService) GetEntityIDForMediaControl(stationID string) (string, error) {
+	station, err := s.config.GetStationByID(stationID)
+	if err != nil {
+		return "", err
+	}
+	if !station.Devices.HA.Enable {
+		return "", fmt.Errorf("工位 %s 的HomeAssistant设备未启用", stationID)
+	}
+	return station.Devices.HA.MediaControl, nil
+}
+
+func (s *HaService) ExecuteSpeakerCommand(ctx context.Context, stationID, command string, text string) error {
+	entityID, err := s.GetEntityIDForSpeaker(stationID)
+	if err != nil {
+		return err
+	}
+	return s.PlayText(ctx, entityID, text)
+}
+
+func (s *HaService) ExecutePlayerCommand(ctx context.Context, stationID, command string) error {
 	entityID, err := s.GetEntityIDForPlayer(stationID)
 	if err != nil {
 		return err
 	}
 
 	switch command {
-	case DeviceOpePlayText:
-		return s.PlayText(ctx, entityID, text)
+	case DeviceOpePlayMusic:
+		return s.PlayMusic(ctx, entityID)
+	}
+	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
+}
+
+func (s *HaService) ExecuteMediaControlCommand(ctx context.Context, stationID, command string, volume float32) error {
+	entityID, err := s.GetEntityIDForMediaControl(stationID)
+	if err != nil {
+		return err
+	}
+	switch command {
+	case DeviceOpePauseMusic:
+		return s.PauseMusic(ctx, entityID)
+	case DeviceOpeSetVolume:
+		return s.SetVolume(ctx, entityID, volume)
 	}
 	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
 }

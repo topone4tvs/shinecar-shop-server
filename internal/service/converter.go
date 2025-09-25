@@ -188,7 +188,8 @@ func (p *PlateCommand) Validate() error {
 // HACommand HomeAssistant命令
 type HACommand struct {
 	BaseDeviceCommand
-	PlayText    string                 `json:"play_text,omitempty"` // 播放文本
+	PlayText    string                 `json:"play_text,omitempty"`   // 播放文本
+	PlayVolume  float32                `json:"play_volume,omitempty"` // 播放音量
 	EntityID    string                 `json:"entity_id"`
 	Domain      string                 `json:"domain"`
 	Service     string                 `json:"service"`

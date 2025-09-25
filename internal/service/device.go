@@ -173,6 +173,13 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		// 3. 打开空调
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
+		// 4. 设置音量，并播放音乐
+		haCmd := &HACommand{
+			PlayVolume: 0.45,
+		}
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPlayMusic, nil)
+
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
 		//dm.setPendingPlateResponse(unionCmd.StationID, map[string]interface{}{
@@ -198,6 +205,8 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 
 		// 3. 关闭空调
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
+		// 4. 关闭音乐
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPauseMusic, nil)
 	}
 
 	return dm.createSuccessResponse(cmd, map[string]interface{}{
@@ -225,8 +234,14 @@ func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, co
 		playText := haCmd.PlayText
 		if playText != "" {
 			log.Printf("执行HomeAssistant voice播放命令: %s, 工位=%s, 文本=%s", command, stationID, playText)
-			return dm.haService.ExecutePlayerCommand(ctx, stationID, DeviceOpePlayText, playText)
+			return dm.haService.ExecuteSpeakerCommand(ctx, stationID, DeviceOpePlayText, playText)
 		}
+	case CommandHAPlayMusic:
+		return dm.haService.ExecutePlayerCommand(ctx, stationID, DeviceOpePlayMusic)
+	case CommandHAPauseMusic:
+		return dm.haService.ExecuteMediaControlCommand(ctx, stationID, DeviceOpePauseMusic, 0)
+	case CommandHASetVolume:
+		return dm.haService.ExecuteMediaControlCommand(ctx, stationID, DeviceOpeSetVolume, haCmd.PlayVolume)
 	}
 	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
 }
@@ -364,7 +379,11 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 	// 根据命令类型设置待处理响应
 	switch haCmd.Command {
 	case CommandHANotice:
+		haCmd.PlayVolume = 1
+		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
+		haCmd.PlayVolume = 0.45
+		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 	}
 
 	responseData := map[string]interface{}{

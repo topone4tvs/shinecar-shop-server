@@ -56,7 +56,9 @@ type HADeviceConfig struct {
 	Enable         bool   `yaml:"enable"`
 	EntityID       string `yaml:"entity_id"`
 	AirConditioner string `yaml:"air_conditioner"` // 空调设备ID
+	Speaker        string `yaml:"speaker"`         // 语音播报的设备ID
 	Player         string `yaml:"player"`          // 播放器的设备ID
+	MediaControl   string `yaml:"media_control"`   // 媒体控制的设备ID
 }
 
 type DevicesConfig struct {

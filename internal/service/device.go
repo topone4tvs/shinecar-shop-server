@@ -174,10 +174,10 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 4. 设置音量，并播放音乐
-		haCmd := &HACommand{
-			PlayVolume: 0.45,
-		}
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
+		//haCmd := &HACommand{
+		//	PlayVolume: 0.45,
+		//}
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPlayMusic, nil)
 
 		// 2. 语音播报 (暂时没有实现)
@@ -379,11 +379,11 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 	// 根据命令类型设置待处理响应
 	switch haCmd.Command {
 	case CommandHANotice:
-		haCmd.PlayVolume = 0.99
-		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		//haCmd.PlayVolume = 0.99
+		//dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
-		haCmd.PlayVolume = 0.45
-		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		//haCmd.PlayVolume = 0.45
+		//dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 	}
 
 	responseData := map[string]interface{}{

@@ -275,6 +275,13 @@ func (c *Client) PauseMusic(ctx context.Context, entityID string) error {
 	return c.CallService(ctx, domain, "media_pause", entityID, nil)
 }
 
+func (c *Client) ExecuteTextDirective(ctx context.Context, entityID string, text string) error {
+	domain := c.getDomainFromEntityID(entityID)
+	return c.CallService(ctx, domain, "execute_text_directive", entityID, map[string]interface{}{
+		"text": text,
+	})
+}
+
 func (c *Client) SetVolume(ctx context.Context, entityID string, volume float32) error {
 	domain := c.getDomainFromEntityID(entityID)
 	return c.CallService(ctx, domain, "volume_set", entityID, map[string]interface{}{

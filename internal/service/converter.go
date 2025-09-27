@@ -188,12 +188,13 @@ func (p *PlateCommand) Validate() error {
 // HACommand HomeAssistant命令
 type HACommand struct {
 	BaseDeviceCommand
-	PlayText    string                 `json:"play_text,omitempty"`   // 播放文本
-	PlayVolume  float32                `json:"play_volume,omitempty"` // 播放音量
-	EntityID    string                 `json:"entity_id"`
-	Domain      string                 `json:"domain"`
-	Service     string                 `json:"service"`
-	ServiceData map[string]interface{} `json:"service_data,omitempty"`
+	PlayText      string                 `json:"play_text,omitempty"`      // 播放文本
+	PlayVolume    float32                `json:"play_volume,omitempty"`    // 播放音量
+	TextDirective string                 `json:"text_directive,omitempty"` // 文本指令
+	EntityID      string                 `json:"entity_id"`
+	Domain        string                 `json:"domain"`
+	Service       string                 `json:"service"`
+	ServiceData   map[string]interface{} `json:"service_data,omitempty"`
 }
 
 // Validate 验证HomeAssistant命令

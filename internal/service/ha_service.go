@@ -12,16 +12,17 @@ import (
 )
 
 const (
-	DeviceOpeTurnOn     = "turn_on"
-	DeviceOpeTurnOff    = "turn_off"
-	DeviceOpeToggle     = "toggle"
-	DeviceOpeStateOn    = "state_on"
-	DeviceOpeStateOff   = "state_off"
-	DeviceOpePlayVoice  = "play_voice"
-	DeviceOpePlayText   = "play_text"
-	DeviceOpePlayMusic  = "play_music"
-	DeviceOpePauseMusic = "pause_music"
-	DeviceOpeSetVolume  = "set_volume"
+	DeviceOpeTurnOn           = "turn_on"
+	DeviceOpeTurnOff          = "turn_off"
+	DeviceOpeToggle           = "toggle"
+	DeviceOpeStateOn          = "state_on"
+	DeviceOpeStateOff         = "state_off"
+	DeviceOpePlayVoice        = "play_voice"
+	DeviceOpePlayText         = "play_text"
+	DeviceOpePlayMusic        = "play_music"
+	DeviceOpePauseMusic       = "pause_music"
+	DeviceOpeSetVolume        = "set_volume"
+	DeviceOpeExecuteDirective = "execute_directive"
 )
 
 // Service HomeAssistant服务实现
@@ -194,6 +195,10 @@ func (s *HaService) SetVolume(ctx context.Context, entityID string, volume float
 	return s.client.SetVolume(ctx, entityID, volume)
 }
 
+func (s *HaService) ExecuteTextDirective(ctx context.Context, entityID string, text string) error {
+	return s.client.ExecuteTextDirective(ctx, entityID, text)
+}
+
 // IsEntityOn 检查实体是否开启
 func (s *HaService) IsEntityOn(ctx context.Context, entityID string) (bool, error) {
 	return s.client.IsEntityOn(ctx, entityID)
@@ -364,6 +369,18 @@ func (s *HaService) GetEntityIDForMediaControl(stationID string) (string, error)
 	return station.Devices.HA.MediaControl, nil
 }
 
+func (s *HaService) GetEntityIDForExecuteDirective(stationID string) (string, error) {
+	station, err := s.config.GetStationByID(stationID)
+	if err != nil {
+		return "", err
+	}
+	if !station.Devices.HA.Enable {
+		return "", fmt.Errorf("工位 %s 的HomeAssistant设备未启用", stationID)
+	}
+
+	return station.Devices.HA.ExecuteDirective, nil
+}
+
 func (s *HaService) ExecuteSpeakerCommand(ctx context.Context, stationID, command string, text string) error {
 	entityID, err := s.GetEntityIDForSpeaker(stationID)
 	if err != nil {
@@ -397,6 +414,14 @@ func (s *HaService) ExecuteMediaControlCommand(ctx context.Context, stationID, c
 		return s.SetVolume(ctx, entityID, volume)
 	}
 	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
+}
+
+func (s *HaService) ExecuteExecuteDirectiveCommand(ctx context.Context, stationID, command string, text string) error {
+	entityID, err := s.GetEntityIDForExecuteDirective(stationID)
+	if err != nil {
+		return err
+	}
+	return s.ExecuteTextDirective(ctx, entityID, text)
 }
 
 // ExecuteAirConditionerCommand 执行工位相关的HomeAssistant命令

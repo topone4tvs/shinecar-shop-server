@@ -174,10 +174,11 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 4. 设置音量，并播放音乐
-		//haCmd := &HACommand{
-		//	PlayVolume: 0.45,
-		//}
-		//dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
+		haCmd := &HACommand{
+			PlayVolume:    0.45,
+			TextDirective: "把音量调到45",
+		}
+		dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPlayMusic, nil)
 
 		// 2. 语音播报 (暂时没有实现)
@@ -242,6 +243,8 @@ func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, co
 		return dm.haService.ExecuteMediaControlCommand(ctx, stationID, DeviceOpePauseMusic, 0)
 	case CommandHASetVolume:
 		return dm.haService.ExecuteMediaControlCommand(ctx, stationID, DeviceOpeSetVolume, haCmd.PlayVolume)
+	case CommandHAExecuteDirective:
+		return dm.haService.ExecuteExecuteDirectiveCommand(ctx, stationID, DeviceOpeExecuteDirective, haCmd.TextDirective)
 	}
 	return fmt.Errorf("不支持的HomeAssistant命令: %s", command)
 }
@@ -379,11 +382,17 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 	// 根据命令类型设置待处理响应
 	switch haCmd.Command {
 	case CommandHANotice:
-		//haCmd.PlayVolume = 0.99
-		//dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		//haCmd.TextDirective = "把音量调到99"
+		//dm.callHaCommand(ctx, haCmd.StationID, CommandHAExecuteDirective, haCmd)
+		haCmd.PlayVolume = 0.99
+		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		time.Sleep(1 * time.Second)
 		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
-		//haCmd.PlayVolume = 0.45
-		//dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		time.Sleep(10 * time.Second)
+		haCmd.PlayVolume = 0.45
+		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		//haCmd.TextDirective = "把音量调到45"
+		//dm.callHaCommand(ctx, haCmd.StationID, CommandHAExecuteDirective, haCmd)
 	}
 
 	responseData := map[string]interface{}{

@@ -388,7 +388,7 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 		time.Sleep(1 * time.Second)
 		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
-		time.Sleep(10 * time.Second)
+		time.Sleep(36 * time.Second)
 		haCmd.PlayVolume = 0.45
 		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 		//haCmd.TextDirective = "把音量调到45"

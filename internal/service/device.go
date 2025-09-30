@@ -174,12 +174,12 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 4. 设置音量，并播放音乐
-		haCmd := &HACommand{
-			PlayVolume:    0.45,
-			TextDirective: "把音量调到45",
-		}
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPlayMusic, nil)
+		//haCmd := &HACommand{
+		//	PlayVolume:    0.45,
+		//	TextDirective: "把音量调到45",
+		//}
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandHASetVolume, haCmd)
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPlayMusic, nil)
 
 		// 2. 语音播报 (暂时没有实现)
 		// 3. 截图保存
@@ -207,7 +207,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		// 3. 关闭空调
 		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
 		// 4. 关闭音乐
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPauseMusic, nil)
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPauseMusic, nil)
 	}
 
 	return dm.createSuccessResponse(cmd, map[string]interface{}{
@@ -386,11 +386,11 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 		//dm.callHaCommand(ctx, haCmd.StationID, CommandHAExecuteDirective, haCmd)
 		haCmd.PlayVolume = 0.99
 		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
-		time.Sleep(1 * time.Second)
+		//time.Sleep(1 * time.Second)
 		dm.callHaCommand(ctx, haCmd.StationID, haCmd.Command, haCmd)
-		time.Sleep(36 * time.Second)
-		haCmd.PlayVolume = 0.45
-		dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
+		//time.Sleep(36 * time.Second)
+		//haCmd.PlayVolume = 0.45
+		//dm.callHaCommand(ctx, haCmd.StationID, CommandHASetVolume, haCmd)
 		//haCmd.TextDirective = "把音量调到45"
 		//dm.callHaCommand(ctx, haCmd.StationID, CommandHAExecuteDirective, haCmd)
 	}

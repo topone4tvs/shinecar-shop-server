@@ -3,10 +3,10 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"shop_server/internal/service"
+	"shop_server/pkg/logger"
 )
 
 // PlateMessage 门禁设备推送的消息结构
@@ -207,7 +207,7 @@ func (h *HTTPServer) processPlateRecognition(stationID string, alarm *AlarmInfoP
 	plateResult := alarm.Result.PlateResult
 	timestamp := plateResult.TimeStamp.Timeval.Sec
 
-	log.Printf("车牌识别结果: 工位=%s, 车牌=%s, 置信度=%d, 设备=%s",
+	logger.Infof("车牌识别结果: 工位=%s, 车牌=%s, 置信度=%d, 设备=%s",
 		stationID, plateResult.License, plateResult.Confidence, alarm.IPAddr)
 
 	// 更新设备状态
@@ -252,7 +252,7 @@ func (h *HTTPServer) processPlateRecognition(stationID string, alarm *AlarmInfoP
 	}
 	err := h.publishToMQTTEvent(stationID, "plate_recognition", event)
 	if err != nil {
-		log.Printf("发布车牌识别事件失败: %v", err)
+		logger.Infof("发布车牌识别事件失败: %v", err)
 	}
 
 	return nil, nil
@@ -263,7 +263,7 @@ func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (inte
 	triggerResult := alarm.Result
 	timestamp := time.Now().Unix()
 
-	log.Printf("IO触发事件: 工位=%s, 源=%d, 值=%d, 设备=%s",
+	logger.Infof("IO触发事件: 工位=%s, 源=%d, 值=%d, 设备=%s",
 		stationID, triggerResult.Source, triggerResult.Value, alarm.IPAddr)
 
 	event := MqttEvent{
@@ -281,7 +281,7 @@ func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (inte
 	}
 	err := h.publishToMQTTEvent(stationID, "io_trigger", event)
 	if err != nil {
-		log.Printf("发布IO触发事件失败: %v", err)
+		logger.Infof("发布IO触发事件失败: %v", err)
 	}
 
 	return nil, nil
@@ -291,7 +291,7 @@ func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (inte
 func (h *HTTPServer) processSerialData(stationID string, serialData *SerialData) (interface{}, error) {
 	timestamp := time.Now().Unix()
 
-	log.Printf("收到串口数据: 工位=%s, 通道=%d, 长度=%d",
+	logger.Infof("收到串口数据: 工位=%s, 通道=%d, 长度=%d",
 		stationID, serialData.SerialChannel, serialData.DataLen)
 
 	event := MqttEvent{
@@ -310,7 +310,7 @@ func (h *HTTPServer) processSerialData(stationID string, serialData *SerialData)
 	}
 	err := h.publishToMQTTEvent(stationID, "serial_data", event)
 	if err != nil {
-		log.Printf("发布串口数据事件失败: %v", err)
+		logger.Infof("发布串口数据事件失败: %v", err)
 	}
 
 	return nil, nil
@@ -320,7 +320,7 @@ func (h *HTTPServer) processSerialData(stationID string, serialData *SerialData)
 func (h *HTTPServer) processTriggerImage(stationID string, triggerImage *TriggerImage) (interface{}, error) {
 	timestamp := time.Now().Unix()
 
-	log.Printf("收到截图数据: 工位=%s, 大小=%d", stationID, triggerImage.ImageFileLen)
+	logger.Infof("收到截图数据: 工位=%s, 大小=%d", stationID, triggerImage.ImageFileLen)
 
 	event := MqttEvent{
 		"type":       "image_capture",
@@ -335,7 +335,7 @@ func (h *HTTPServer) processTriggerImage(stationID string, triggerImage *Trigger
 	}
 	err := h.publishToMQTTEvent(stationID, "image_capture", event)
 	if err != nil {
-		log.Printf("发布截图事件失败: %v", err)
+		logger.Infof("发布截图事件失败: %v", err)
 	}
 
 	return nil, nil

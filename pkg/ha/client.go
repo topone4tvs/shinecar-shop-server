@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
+
+	"shop_server/pkg/logger"
 )
 
 // Client HomeAssistant客户端
@@ -84,7 +85,7 @@ func (c *Client) CallService(ctx context.Context, domain, service string, entity
 		return fmt.Errorf("序列化请求数据失败: %w", err)
 	}
 
-	log.Printf("调用HomeAssistant服务: %s.%s, 实体: %s, 数据: %s", domain, service, entityID, string(jsonData))
+	logger.Infof("调用HomeAssistant服务: %s.%s, 实体: %s, 数据: %s", domain, service, entityID, string(jsonData))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
 	if err != nil {
@@ -104,7 +105,7 @@ func (c *Client) CallService(ctx context.Context, domain, service string, entity
 		return fmt.Errorf("HomeAssistant API调用失败: %s, 响应: %s", resp.Status, string(body))
 	}
 
-	log.Printf("HomeAssistant服务调用成功: %s.%s resp: %s", domain, service, string(body))
+	logger.Infof("HomeAssistant服务调用成功: %s.%s resp: %s", domain, service, string(body))
 	return nil
 }
 
@@ -114,7 +115,7 @@ func (c *Client) GetEntityState(ctx context.Context, entityID string) (*EntitySt
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		log.Printf("创建HA请求失败: %v", err)
+		logger.Infof("创建HA请求失败: %v", err)
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
@@ -140,7 +141,7 @@ func (c *Client) GetEntityState(ctx context.Context, entityID string) (*EntitySt
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
-	log.Printf("获取实体状态成功: %s = %s", entityID, state.State)
+	logger.Infof("获取实体状态成功: %s = %s", entityID, state.State)
 	return &state, nil
 }
 
@@ -175,7 +176,7 @@ func (c *Client) SetEntityState(ctx context.Context, entityID string, state inte
 		return fmt.Errorf("设置实体状态失败: %s, 响应: %s", resp.Status, string(body))
 	}
 
-	log.Printf("设置实体状态成功: %s = %v", entityID, state)
+	logger.Infof("设置实体状态成功: %s = %v", entityID, state)
 	return nil
 }
 
@@ -206,7 +207,7 @@ func (c *Client) GetAllStates(ctx context.Context) ([]EntityState, error) {
 		return nil, fmt.Errorf("解析响应失败: %w", err)
 	}
 
-	log.Printf("获取所有状态成功: %d个实体", len(states))
+	logger.Infof("获取所有状态成功: %d个实体", len(states))
 	return states, nil
 }
 
@@ -231,7 +232,7 @@ func (c *Client) CheckHealth(ctx context.Context) error {
 		return fmt.Errorf("HomeAssistant健康检查失败: %s", resp.Status)
 	}
 
-	log.Println("HomeAssistant健康检查成功")
+	logger.Infof("HomeAssistant健康检查成功")
 	return nil
 }
 

@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
 	"shop_server/config"
+	"shop_server/pkg/logger"
 	"shop_server/pkg/mqtt"
 )
 
@@ -36,7 +36,7 @@ func NewRouter(cfg *config.Config, mqttClient *mqtt.Client, deviceManager *Devic
 
 // Start 启动路由器
 func (r *Router) Start(ctx context.Context) error {
-	log.Println("启动消息路由器...")
+	logger.Infof("启动消息路由器...")
 
 	// 订阅MQTT主题
 	if err := r.subscribeTopics(); err != nil {
@@ -46,13 +46,13 @@ func (r *Router) Start(ctx context.Context) error {
 	// 启动设备健康检查
 	go r.deviceManager.StartHealthCheck(ctx)
 
-	log.Println("消息路由器启动成功")
+	logger.Infof("消息路由器启动成功")
 	return nil
 }
 
 // Stop 停止路由器
 func (r *Router) Stop(ctx context.Context) error {
-	log.Println("停止消息路由器...")
+	logger.Infof("停止消息路由器...")
 	// 这里可以添加清理逻辑
 	return nil
 }
@@ -74,7 +74,7 @@ func (r *Router) handleMQTTMessage(topic string, payload []byte) error {
 		return fmt.Errorf("读取payload失败: %w", err)
 	}
 
-	log.Printf("收到MQTT消息 - 主题: %s, 内容: %s", topic, string(body))
+	logger.Infof("收到MQTT消息 - 主题: %s, 内容: %s", topic, string(body))
 
 	// 解析主题，提取工位ID
 	stationID, err := r.parseStationID(topic)
@@ -99,7 +99,7 @@ func (r *Router) handleMQTTMessage(topic string, payload []byte) error {
 
 // processMessage 处理消息
 func (r *Router) processMessage(msg *MQTTMessage) error {
-	log.Printf("处理消息: %s", msg.String())
+	logger.Infof("处理消息: %s", msg.String())
 
 	ctx := context.Background()
 
@@ -126,17 +126,17 @@ func (r *Router) processDeviceMessage(ctx context.Context, msg *MQTTMessage) err
 	// 执行设备命令
 	response, err := r.deviceManager.ExecuteCommand(ctx, deviceCmd)
 	if err != nil {
-		log.Printf("执行设备命令失败: %v", err)
+		logger.Infof("执行设备命令失败: %v", err)
 		return err
 	}
 
 	// 发布响应（如果需要）
 	if err := r.publishResponse(response); err != nil {
-		log.Printf("发布响应失败: %v", err)
+		logger.Infof("发布响应失败: %v", err)
 		return err
 	}
 
-	log.Printf("设备命令执行成功: 命令=%s, 设备=%s, 工位=%s",
+	logger.Infof("设备命令执行成功: 命令=%s, 设备=%s, 工位=%s",
 		response.GetCommand(), response.GetDeviceType(), response.GetStationID())
 
 	return nil
@@ -144,7 +144,7 @@ func (r *Router) processDeviceMessage(ctx context.Context, msg *MQTTMessage) err
 
 // processQueryMessage 处理查询消息
 func (r *Router) processQueryMessage(ctx context.Context, msg *MQTTMessage) error {
-	log.Printf("处理查询消息: %s", msg.Command)
+	logger.Infof("处理查询消息: %s", msg.Command)
 
 	var responseData interface{}
 	var err error
@@ -168,7 +168,7 @@ func (r *Router) processQueryMessage(ctx context.Context, msg *MQTTMessage) erro
 
 // processConfigMessage 处理配置消息
 func (r *Router) processConfigMessage(ctx context.Context, msg *MQTTMessage) error {
-	log.Printf("处理配置消息: %s", msg.Command)
+	logger.Infof("处理配置消息: %s", msg.Command)
 
 	switch msg.Command {
 	case "reload_config":
@@ -227,7 +227,7 @@ func (r *Router) publishQueryResult(originalMsg *MQTTMessage, data interface{}) 
 
 // reloadConfig 重新加载配置
 func (r *Router) reloadConfig() error {
-	log.Println("重新加载配置...")
+	logger.Infof("重新加载配置...")
 	// 这里可以实现配置重新加载逻辑
 	// 目前只是日志记录
 	return nil
@@ -235,7 +235,7 @@ func (r *Router) reloadConfig() error {
 
 // updateStationConfig 更新工位配置
 func (r *Router) updateStationConfig(msg *MQTTMessage) error {
-	log.Printf("更新工位配置: %s", msg.StationID)
+	logger.Infof("更新工位配置: %s", msg.StationID)
 	// 这里可以实现工位配置更新逻辑
 	// 目前只是日志记录
 	return nil

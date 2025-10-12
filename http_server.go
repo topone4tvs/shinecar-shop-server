@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	"shop_server/config"
 	"shop_server/internal/server"
 	"shop_server/internal/service"
+	"shop_server/pkg/logger"
 	_ "time/tzdata" // 强制设置时区
 )
 
@@ -24,15 +24,28 @@ func main() {
 	}
 	time.Local = loc
 
-	log.Println("启动洗车店智能设备管理系统 - HTTP服务模式...")
-
 	// 加载配置
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("加载配置失败: %v", err)
+		// 配置加载失败时使用标准输出
+		panic("加载配置失败: " + err.Error())
 	}
 
-	log.Printf("配置加载成功: 环境=%s, 店铺=%s, 工位数量=%d", cfg.GetEnvironment(), cfg.Shop.Name, len(cfg.Shop.Stations))
+	// 初始化日志系统
+	logConfig := &logger.Config{
+		Level:    cfg.Log.Level,
+		FilePath: cfg.Log.FilePath,
+		MaxAge:   cfg.Log.MaxAge,
+		Compress: cfg.Log.Compress,
+		Console:  cfg.Log.Console,
+	}
+	if err := logger.Init(logConfig); err != nil {
+		panic("初始化日志系统失败: " + err.Error())
+	}
+	defer logger.Sync()
+
+	logger.Infof("启动洗车店智能设备管理系统 - HTTP服务模式...")
+	logger.Infof("配置加载成功: 环境=%s, 店铺=%s, 工位数量=%d", cfg.GetEnvironment(), cfg.Shop.Name, len(cfg.Shop.Stations))
 
 	// 创建上下文用于优雅关闭
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,21 +68,21 @@ func main() {
 	go func() {
 		defer wg.Done()
 		if err := httpServer.Start(ctx); err != nil {
-			log.Printf("启动HTTP服务器失败: %v", err)
+			logger.Infof("启动HTTP服务器失败: %v", err)
 			cancel()
 		}
 	}()
 
-	log.Println("HTTP服务启动成功，系统运行中...")
-	log.Printf("HTTP服务器地址: http://%s:%d", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("API端点列表:")
-	log.Printf("  GET  /health                           - 健康检查")
-	log.Printf("  GET  /                                 - 系统信息")
-	log.Printf("  POST /api/plate/station/{station_id}  - 门禁推送接收")
-	log.Printf("  POST /api/device/heartbeat/{station_id} - 设备心跳")
-	log.Printf("  POST /api/device/gio/{station_id}     - 门禁状态推送")
-	log.Printf("  GET  /api/status                       - 系统状态")
-	log.Printf("  GET  /api/status/station/{station_id}  - 工位状态")
+	logger.Infof("HTTP服务启动成功，系统运行中...")
+	logger.Infof("HTTP服务器地址: http://%s:%d", cfg.Server.Host, cfg.Server.Port)
+	logger.Infof("API端点列表:")
+	logger.Infof("  GET  /health                           - 健康检查")
+	logger.Infof("  GET  /                                 - 系统信息")
+	logger.Infof("  POST /api/plate/station/{station_id}  - 门禁推送接收")
+	logger.Infof("  POST /api/device/heartbeat/{station_id} - 设备心跳")
+	logger.Infof("  POST /api/device/gio/{station_id}     - 门禁状态推送")
+	logger.Infof("  GET  /api/status                       - 系统状态")
+	logger.Infof("  GET  /api/status/station/{station_id}  - 工位状态")
 
 	// 等待系统信号
 	sigChan := make(chan os.Signal, 1)
@@ -77,13 +90,13 @@ func main() {
 
 	select {
 	case <-sigChan:
-		log.Println("收到退出信号...")
+		logger.Infof("收到退出信号...")
 	case <-ctx.Done():
-		log.Println("系统异常退出...")
+		logger.Infof("系统异常退出...")
 	}
 
 	// 优雅关闭
-	log.Println("开始关闭系统...")
+	logger.Infof("开始关闭系统...")
 	cancel() // 取消上下文，通知所有goroutine停止
 
 	// 创建关闭超时上下文
@@ -93,7 +106,7 @@ func main() {
 	// 停止HTTP服务器
 	go func() {
 		if err := httpServer.Stop(shutdownCtx); err != nil {
-			log.Printf("停止HTTP服务器失败: %v", err)
+			logger.Infof("停止HTTP服务器失败: %v", err)
 		}
 	}()
 
@@ -106,10 +119,10 @@ func main() {
 
 	select {
 	case <-done:
-		log.Println("所有服务已停止")
+		logger.Infof("所有服务已停止")
 	case <-shutdownCtx.Done():
-		log.Println("关闭超时，强制退出")
+		logger.Infof("关闭超时，强制退出")
 	}
 
-	log.Println("洗车店智能设备管理系统已退出")
+	logger.Infof("洗车店智能设备管理系统已退出")
 }

@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"shop_server/config"
+	"shop_server/pkg/logger"
 )
 
 // DeviceService 设备服务接口
@@ -62,7 +62,7 @@ func NewDeviceManager(cfg *config.Config) *DeviceManager {
 
 // ExecuteCommand 执行设备命令
 func (dm *DeviceManager) ExecuteCommand(ctx context.Context, cmd DeviceCommand) (DeviceResponse, error) {
-	log.Printf("执行设备命令: %s, 设备类型: %s, 工位: %s, raw:%+v", cmd.GetCommand(), cmd.GetDeviceType(), cmd.GetStationID(), cmd)
+	logger.Infof("执行设备命令: %s, 设备类型: %s, 工位: %s, raw:%+v", cmd.GetCommand(), cmd.GetDeviceType(), cmd.GetStationID(), cmd)
 
 	// 验证命令
 	if err := cmd.Validate(); err != nil {
@@ -92,7 +92,7 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 	}
 
 	// 门禁命令的处理逻辑
-	log.Printf("准备门禁命令响应: %s", plateCmd.Command)
+	logger.Infof("准备门禁命令响应: %s", plateCmd.Command)
 
 	// 更新设备状态
 	dm.updatePlateDeviceStatus(plateCmd.StationID, true, map[string]interface{}{
@@ -105,13 +105,13 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 	case CommandOpenGate:
 		// 使用抽象的门禁控制方法
 		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandOpenGate); err != nil {
-			log.Printf("执行开门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			logger.Infof("执行开门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 	case CommandCloseGate:
 		// 使用抽象的门禁控制方法
 		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandCloseGate); err != nil {
-			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			logger.Infof("执行关门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 	case CommandVoicePlay:
@@ -148,7 +148,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	}
 
 	// 联动命令的处理逻辑
-	log.Printf("准备联动命令响应: %s", unionCmd.Command)
+	logger.Infof("准备联动命令响应: %s", unionCmd.Command)
 
 	// 更新设备状态
 	dm.updatePlateDeviceStatus(unionCmd.StationID, true, map[string]interface{}{
@@ -161,12 +161,12 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		// 订单开启后要执行的命令
 		// 1. 开闸
 		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
-			log.Printf("执行开门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			logger.Infof("执行开门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 		// 2. 通电
 		if err := dm.executePowerCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
-			log.Printf("执行通电指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			logger.Infof("执行通电指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 
@@ -195,12 +195,12 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		// 订单关闭后要执行的命令
 		// 1. 关闸
 		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
-			log.Printf("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			logger.Infof("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 		// 2. 断电
 		if err := dm.executePowerCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
-			log.Printf("执行断电指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
+			logger.Infof("执行断电指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 
@@ -222,19 +222,19 @@ func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, co
 	case CommandUnionStart:
 		callCmdErr = dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeStateOn)
 		if callCmdErr == nil {
-			log.Printf("跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
+			logger.Infof("跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
 		}
 		return dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeTurnOn)
 	case CommandUnionFinish:
 		callCmdErr = dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeStateOff)
 		if callCmdErr == nil {
-			log.Printf("应该可以跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
+			logger.Infof("应该可以跳过执行HomeAssistant命令成功: %s, 工位=%s", command, stationID)
 		}
 		return dm.haService.ExecuteAirConditionerCommand(ctx, stationID, DeviceOpeTurnOff)
 	case CommandHANotice:
 		playText := haCmd.PlayText
 		if playText != "" {
-			log.Printf("执行HomeAssistant voice播放命令: %s, 工位=%s, 文本=%s", command, stationID, playText)
+			logger.Infof("执行HomeAssistant voice播放命令: %s, 工位=%s, 文本=%s", command, stationID, playText)
 			return dm.haService.ExecuteSpeakerCommand(ctx, stationID, DeviceOpePlayText, playText)
 		}
 	case CommandHAPlayMusic:
@@ -301,7 +301,7 @@ func (dm *DeviceManager) powerOff(ctx context.Context, stationID string, command
 func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	// 检查门禁状态，如果门已经开启则不需要再次开门
 	//if dm.IsGateOpen(stationID) {
-	//	log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+	//	logger.Infof("门禁已开启，跳过开门指令: 工位=%s", stationID)
 	//	// 通电指令还是要继续
 	//	dm.setPendingPlateResponse(stationID, map[string]interface{}{
 	//		"Response_AlarmInfoPlate": map[string]interface{}{
@@ -315,7 +315,7 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	//}
 
 	// 执行开门指令
-	log.Printf("执行开门指令: 工位=%s", stationID)
+	logger.Infof("执行开门指令: 工位=%s", stationID)
 	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
@@ -331,10 +331,10 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 
 // closeGate 关门操作
 func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error {
-	log.Printf("执行关门指令: 工位=%s", stationID)
+	logger.Infof("执行关门指令: 工位=%s", stationID)
 	// 检查门禁状态，如果门已经开启则不需要再次开门
 	//if dm.IsGateOpen(stationID) {
-	//	log.Printf("门禁已开启，跳过开门指令: 工位=%s", stationID)
+	//	logger.Infof("门禁已开启，跳过开门指令: 工位=%s", stationID)
 	//	// 断电指令还是要继续
 	//	dm.setPendingPlateResponse(stationID, map[string]interface{}{
 	//		"Response_AlarmInfoPlate": map[string]interface{}{
@@ -368,7 +368,7 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 	}
 
 	// 简化的HomeAssistant命令处理
-	log.Printf("准备HomeAssistant命令: %s, 实体: %s", haCmd.Command, haCmd.EntityID)
+	logger.Infof("准备HomeAssistant命令: %s, 实体: %s", haCmd.Command, haCmd.EntityID)
 
 	// 更新设备状态
 	dm.updateHADeviceStatus(haCmd.StationID, true, map[string]interface{}{
@@ -420,11 +420,11 @@ func (dm *DeviceManager) UpdateDeviceStatus(stationID string, status *DeviceStat
 		if status.Data != nil {
 			existingStatus.Data = status.Data
 		}
-		//log.Printf("设备状态已更新: 工位=%s, 在线=%t, 最后心跳=%s", stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
+		//logger.Infof("设备状态已更新: 工位=%s, 在线=%t, 最后心跳=%s", stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
 	} else {
 		// 如果不存在，创建新的状态
 		dm.deviceStatus[stationID] = status
-		log.Printf("设备状态已创建: 工位=%s, 在线=%t, 最后心跳=%s", stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
+		logger.Infof("设备状态已创建: 工位=%s, 在线=%t, 最后心跳=%s", stationID, status.Online, status.LastSeen.Format("2006-01-02 15:04:05"))
 	}
 }
 
@@ -461,7 +461,7 @@ func (dm *DeviceManager) SetPendingPlateResponse(stationID string, response inte
 	defer dm.mutex.Unlock()
 
 	dm.plateResponses[stationID] = append(dm.plateResponses[stationID], response)
-	log.Printf("设置门禁待处理响应: 工位=%s 命令=%s", stationID, response)
+	logger.Infof("设置门禁待处理响应: 工位=%s 命令=%s", stationID, response)
 }
 
 // GetPendingPlateResponseCount 获取指定工位待处理响应的数量
@@ -493,7 +493,7 @@ func (dm *DeviceManager) ClearPendingPlateResponses(stationID string) {
 	defer dm.mutex.Unlock()
 
 	delete(dm.plateResponses, stationID)
-	log.Printf("清空门禁待处理响应: 工位=%s", stationID)
+	logger.Infof("清空门禁待处理响应: 工位=%s", stationID)
 }
 
 // GetPendingPlateResponse 获取待处理的门禁响应
@@ -508,7 +508,7 @@ func (dm *DeviceManager) GetPendingPlateResponse(stationID string) (interface{},
 	// 获取并删除队列中的第一个元素
 	response := dm.plateResponses[stationID][0]
 	dm.plateResponses[stationID] = dm.plateResponses[stationID][1:]
-	log.Printf("获取门禁待处理响应: 工位=%s", stationID)
+	logger.Infof("获取门禁待处理响应: 工位=%s", stationID)
 
 	return response, true
 }
@@ -524,7 +524,7 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 	if exists {
 		// 如果已存在，检查设备类型是否匹配
 		if existingStatus.DeviceType != DeviceTypePlate {
-			log.Printf("updatePlateDeviceStatus: 工位=%s, 设备类型不匹配, 期望=%s, 实际=%s",
+			logger.Infof("updatePlateDeviceStatus: 工位=%s, 设备类型不匹配, 期望=%s, 实际=%s",
 				stationID, DeviceTypePlate, existingStatus.DeviceType)
 			// 如果设备类型不匹配，创建新的门禁设备状态
 			status := &DeviceStatus{
@@ -536,7 +536,7 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 				Data:       data,
 			}
 			dm.deviceStatus[stationID] = status
-			log.Printf("门禁设备状态已重新创建: 工位=%s, 在线=%t", stationID, online)
+			logger.Infof("门禁设备状态已重新创建: 工位=%s, 在线=%t", stationID, online)
 			return
 		}
 
@@ -547,10 +547,10 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 		if data != nil {
 			existingStatus.Data = data
 		}
-		log.Printf("门禁设备状态已更新: 工位=%s, 在线=%t", stationID, online)
+		logger.Infof("门禁设备状态已更新: 工位=%s, 在线=%t", stationID, online)
 	} else {
 		// 如果不存在，创建新的状态
-		log.Printf("updatePlateDeviceStatus: 工位=%s, 创建新状态", stationID)
+		logger.Infof("updatePlateDeviceStatus: 工位=%s, 创建新状态", stationID)
 		status := &DeviceStatus{
 			DeviceType: DeviceTypePlate,
 			StationID:  stationID,
@@ -560,7 +560,7 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 			Data:       data,
 		}
 		dm.deviceStatus[stationID] = status
-		log.Printf("门禁设备状态已创建: 工位=%s, 在线=%t", stationID, online)
+		logger.Infof("门禁设备状态已创建: 工位=%s, 在线=%t", stationID, online)
 	}
 }
 
@@ -583,7 +583,7 @@ func (dm *DeviceManager) UpdateGateStatus(stationID string, source int, value in
 
 	dm.gateStatus[stationID] = gateStatus
 
-	log.Printf("门禁状态已更新: 工位=%s, 开启=%t, 源=%d, 值=%d, 指针=%p",
+	logger.Infof("门禁状态已更新: 工位=%s, 开启=%t, 源=%d, 值=%d, 指针=%p",
 		stationID, isOpen, source, value, gateStatus)
 }
 
@@ -594,11 +594,11 @@ func (dm *DeviceManager) IsGateOpen(stationID string) bool {
 
 	gateStatus, exists := dm.gateStatus[stationID]
 	if !exists {
-		log.Printf("IsGateOpen: 工位=%s, 门禁状态不存在", stationID)
+		logger.Infof("IsGateOpen: 工位=%s, 门禁状态不存在", stationID)
 		return false
 	}
 
-	log.Printf("IsGateOpen: 工位=%s, 门禁状态=%t, 源=%d, 值=%d",
+	logger.Infof("IsGateOpen: 工位=%s, 门禁状态=%t, 源=%d, 值=%d",
 		stationID, gateStatus.IsOpen, gateStatus.Source, gateStatus.Value)
 	return gateStatus.IsOpen
 }
@@ -622,7 +622,7 @@ func (dm *DeviceManager) updateHADeviceStatus(stationID string, online bool, dat
 	}
 
 	dm.deviceStatus[stationID] = status
-	log.Printf("更新HomeAssistant设备状态: 工位=%s, 在线=%v", stationID, online)
+	logger.Infof("更新HomeAssistant设备状态: 工位=%s, 在线=%v", stationID, online)
 }
 
 // StartHealthCheck 启动设备健康检查
@@ -633,7 +633,7 @@ func (dm *DeviceManager) StartHealthCheck(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("设备健康检查已停止")
+			logger.Infof("设备健康检查已停止")
 			return
 		case <-ticker.C:
 			dm.performHealthCheck()
@@ -653,7 +653,7 @@ func (dm *DeviceManager) performHealthCheck() {
 		if status.Online && now.Sub(status.LastSeen) > offlineThreshold {
 			status.Online = false
 			status.Status = "offline"
-			log.Printf("设备离线: 工位=%s, 设备类型=%s, 最后心跳=%s",
+			logger.Infof("设备离线: 工位=%s, 设备类型=%s, 最后心跳=%s",
 				stationID, status.DeviceType, status.LastSeen.Format("2006-01-02 15:04:05"))
 		}
 	}

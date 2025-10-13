@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"shop_server/config"
 	"shop_server/pkg/ha"
+	"shop_server/pkg/logger"
 )
 
 const (
@@ -56,7 +56,7 @@ func (s *HaService) GetDeviceType() string {
 
 // ExecuteCommand 执行设备命令
 func (s *HaService) ExecuteCommand(ctx context.Context, cmd DeviceCommand) (DeviceResponse, error) {
-	log.Printf("执行HomeAssistant命令: %s, 工位=%s", cmd.GetCommand(), cmd.GetStationID())
+	logger.Infof("执行HomeAssistant命令: %s, 工位=%s", cmd.GetCommand(), cmd.GetStationID())
 
 	haCmd, ok := cmd.(*HACommand)
 	if !ok {
@@ -106,7 +106,7 @@ func (s *HaService) GetDeviceStatus(ctx context.Context, stationID string) (Devi
 func (s *HaService) IsHealthy(ctx context.Context) bool {
 	// 检查与HomeAssistant的连接
 	if err := s.client.CheckHealth(ctx); err != nil {
-		log.Printf("HomeAssistant健康检查失败: %v", err)
+		logger.Errorf("HomeAssistant健康检查失败: %v", err)
 		return false
 	}
 
@@ -115,11 +115,11 @@ func (s *HaService) IsHealthy(ctx context.Context) bool {
 
 // CallService 调用HomeAssistant服务
 func (s *HaService) CallService(ctx context.Context, domain, service string, entityID string, data map[string]interface{}) error {
-	log.Printf("调用HomeAssistant服务: %s.%s, 实体: %s", domain, service, entityID)
+	logger.Infof("调用HomeAssistant服务: %s.%s, 实体: %s", domain, service, entityID)
 
 	err := s.client.CallService(ctx, domain, service, entityID, data)
 	if err != nil {
-		log.Printf("HomeAssistant服务调用失败: %v", err)
+		logger.Errorf("HomeAssistant服务调用失败: %v", err)
 		return err
 	}
 
@@ -228,7 +228,7 @@ func (s *HaService) UpdateStationStatus(ctx context.Context) error {
 		entityID := station.Devices.HA.EntityID
 		state, err := s.client.GetEntityState(ctx, entityID)
 		if err != nil {
-			log.Printf("获取工位 %s 的HomeAssistant状态失败: %v", station.ID, err)
+			logger.Errorf("获取工位 %s 的HomeAssistant状态失败: %v", station.ID, err)
 			s.updateDeviceStatus(station.ID, false, nil)
 			continue
 		}
@@ -253,11 +253,11 @@ func (s *HaService) StartStatusSync(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("HomeAssistant状态同步已停止")
+			logger.Infof("HomeAssistant状态同步已停止")
 			return
 		case <-ticker.C:
 			if err := s.UpdateStationStatus(ctx); err != nil {
-				log.Printf("HomeAssistant状态同步失败: %v", err)
+				logger.Errorf("HomeAssistant状态同步失败: %v", err)
 			}
 		}
 	}
@@ -295,7 +295,7 @@ func (s *HaService) updateDeviceStatus(stationID string, online bool, data map[s
 	}
 
 	s.deviceStatus[stationID] = status
-	log.Printf("更新HomeAssistant设备状态: 工位=%s, 在线=%v", stationID, online)
+	logger.Infof("更新HomeAssistant设备状态: 工位=%s, 在线=%v", stationID, online)
 }
 
 // createSuccessResponse 创建成功响应

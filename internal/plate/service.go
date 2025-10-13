@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"shop_server/config"
 	"shop_server/internal/service"
+	"shop_server/pkg/logger"
 )
 
 // Service 门禁服务实现
@@ -92,7 +92,7 @@ func (s *Service) GetDeviceType() string {
 // ExecuteCommand 执行设备命令
 func (s *Service) ExecuteCommand(ctx context.Context, cmd service.DeviceCommand) (service.DeviceResponse, error) {
 	// 门禁系统命令通过响应机制实现，这里只是准备响应数据
-	log.Printf("准备门禁设备响应: 命令=%s, 工位=%s", cmd.GetCommand(), cmd.GetStationID())
+	logger.Infof("准备门禁设备响应: 命令=%s, 工位=%s", cmd.GetCommand(), cmd.GetStationID())
 	return &service.BaseDeviceResponse{
 		DeviceType: service.DeviceTypePlate,
 		Command:    cmd.GetCommand(),
@@ -173,7 +173,7 @@ func (s *Service) PlayVoice(ctx context.Context, stationID string, text string) 
 		},
 	}
 
-	log.Printf("准备语音播报响应: 工位=%s, 文本=%s", stationID, text)
+	logger.Infof("准备语音播报响应: 工位=%s, 文本=%s", stationID, text)
 	return s.PrepareResponse(stationID, response)
 }
 
@@ -209,7 +209,7 @@ func (s *Service) PrepareResponse(stationID string, response interface{}) error 
 
 	if plateResponse, ok := response.(*Response); ok {
 		s.pendingResponses[stationID] = append(s.pendingResponses[stationID], plateResponse)
-		log.Printf("准备门禁响应数据: 工位=%s", stationID)
+		logger.Infof("准备门禁响应数据: 工位=%s", stationID)
 		return nil
 	}
 
@@ -229,7 +229,7 @@ func (s *Service) GetPendingResponse(stationID string) (interface{}, bool) {
 		} else {
 			s.pendingResponses[stationID] = responses[1:]
 		}
-		log.Printf("获取门禁响应数据: 工位=%s", stationID)
+		logger.Infof("获取门禁响应数据: 工位=%s", stationID)
 		return response, true
 	}
 
@@ -255,7 +255,7 @@ func (s *Service) UpdateDeviceStatus(stationID string, online bool, data map[str
 	}
 
 	s.deviceStatus[stationID] = status
-	log.Printf("更新门禁设备状态: 工位=%s, 在线=%v", stationID, online)
+	logger.Infof("更新门禁设备状态: 工位=%s, 在线=%v", stationID, online)
 }
 
 // GetAllStations 获取所有工位状态
@@ -284,7 +284,7 @@ func (s *Service) ClearPendingResponses() {
 	s.pendingResponses = make(map[string][]*Response)
 
 	if cleared > 0 {
-		log.Printf("清理了 %d 个待处理的门禁响应", cleared)
+		logger.Infof("清理了 %d 个待处理的门禁响应", cleared)
 	}
 }
 

@@ -2,3 +2,4 @@
 snapshot/
 bin/
 config/env.yaml
+logs/

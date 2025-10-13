@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"shop_server/config"
 	"shop_server/internal/service"
+	"shop_server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -112,37 +112,37 @@ func (h *HTTPServer) setupRoutes() {
 		api.POST("/device/other/test/:station_id/:ope", h.handleDeviceTestOpe)
 	}
 
-	log.Printf("HTTP路由已设置，等待服务器初始化...")
+	logger.Infof("HTTP路由已设置，等待服务器初始化...")
 }
 
 // Start 启动HTTP服务器
 func (h *HTTPServer) Start(ctx context.Context) error {
-	log.Printf("启动HTTP服务器: %s", h.server.Addr)
+	logger.Infof("启动HTTP服务器: %s", h.server.Addr)
 
 	go func() {
 		if err := h.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("HTTP服务器启动失败: %v", err)
+			logger.Infof("HTTP服务器启动失败: %v", err)
 		}
 	}()
 
-	log.Printf("HTTP服务器已启动: %s", h.server.Addr)
+	logger.Infof("HTTP服务器已启动: %s", h.server.Addr)
 	return nil
 }
 
 // Stop 停止HTTP服务器
 func (h *HTTPServer) Stop(ctx context.Context) error {
-	log.Println("停止HTTP服务器...")
+	logger.Infof("停止HTTP服务器...")
 
 	// 设置关闭超时
 	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	if err := h.server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP服务器关闭失败: %v", err)
+		logger.Infof("HTTP服务器关闭失败: %v", err)
 		return err
 	}
 
-	log.Println("HTTP服务器已停止")
+	logger.Infof("HTTP服务器已停止")
 	return nil
 }
 
@@ -176,11 +176,11 @@ func (h *HTTPServer) index(c *gin.Context) {
 func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 	stationID := c.Param("station_id")
 
-	log.Printf("收到门禁设备推送: 工位=%s, IP=%s", stationID, c.ClientIP())
+	logger.Infof("收到门禁设备推送: 工位=%s, IP=%s", stationID, c.ClientIP())
 
 	// 验证工位是否存在
 	if _, err := h.config.GetStationByID(stationID); err != nil {
-		log.Printf("无效的工位ID: %s", stationID)
+		logger.Infof("无效的工位ID: %s", stationID)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": fmt.Sprintf("无效的工位ID: %s", stationID),
 		})
@@ -190,19 +190,19 @@ func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 	// 读取请求体
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		log.Printf("读取请求体失败: %v", err)
+		logger.Infof("读取请求体失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取请求体失败",
 		})
 		return
 	}
 
-	log.Printf("门禁推送内容: %s", string(body))
+	logger.Infof("门禁推送内容: %s", string(body))
 
 	// 解析门禁消息
 	plateMsg, err := h.parsePlateMessage(body)
 	if err != nil {
-		log.Printf("解析门禁消息失败: %v", err)
+		logger.Infof("解析门禁消息失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "解析消息失败",
 		})
@@ -212,7 +212,7 @@ func (h *HTTPServer) handlePlateMessage(c *gin.Context) {
 	// 处理门禁消息
 	response, err := h.processPlateMessage(stationID, plateMsg)
 	if err != nil {
-		log.Printf("处理门禁消息失败: %v", err)
+		logger.Infof("处理门禁消息失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "处理消息失败",
 		})
@@ -266,7 +266,7 @@ func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 	// 检查是否有待处理的响应（包括MQTT指令和原有响应）
 	deviceManager := h.manager.GetDeviceManager()
 	if response, exists := deviceManager.GetPendingPlateResponse(stationID); exists {
-		log.Printf("心跳下发响应: 工位=%s", stationID)
+		logger.Infof("心跳下发响应: 工位=%s", stationID)
 		c.JSON(http.StatusOK, response)
 		return
 	}
@@ -281,12 +281,12 @@ func (h *HTTPServer) handleDeviceHeartbeat(c *gin.Context) {
 func (h *HTTPServer) handleSnapshot(c *gin.Context) {
 	stationID := c.Param("station_id")
 
-	log.Printf("收到截图上传: 工位=%s, IP=%s", stationID, c.ClientIP())
+	logger.Infof("收到截图上传: 工位=%s, IP=%s", stationID, c.ClientIP())
 
 	// 读取截图数据
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		log.Printf("读取截图数据失败: %v", err)
+		logger.Infof("读取截图数据失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取截图数据失败",
 		})
@@ -297,7 +297,7 @@ func (h *HTTPServer) handleSnapshot(c *gin.Context) {
 	filePath := fmt.Sprintf("snapshot/%s.jpg", stationID)
 	err = os.WriteFile(filePath, body, 0644)
 	if err != nil {
-		log.Printf("保存截图数据失败: %v", err)
+		logger.Infof("保存截图数据失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "保存截图数据失败",
 		})
@@ -305,13 +305,13 @@ func (h *HTTPServer) handleSnapshot(c *gin.Context) {
 	}
 
 	// 处理截图数据（这里可以保存到文件系统或云存储）
-	log.Printf("收到截图数据: 工位=%s, 大小=%d bytes", stationID, len(body))
+	logger.Infof("收到截图数据: 工位=%s, 大小=%d bytes", stationID, len(body))
 
 	// 发布截图事件到MQTT（简化模式下跳过）
 	if router := h.manager.GetRouter(); router != nil {
 		h.publishSnapshotEvent(stationID, len(body))
 	} else {
-		log.Printf("截图事件记录: 工位=%s, 大小=%d bytes (MQTT不可用)", stationID, len(body))
+		logger.Infof("截图事件记录: 工位=%s, 大小=%d bytes (MQTT不可用)", stationID, len(body))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -380,7 +380,7 @@ func (h *HTTPServer) testMQTTPublish(c *gin.Context) {
 			return
 		}
 	} else {
-		log.Printf("测试消息记录: 工位=%s, 消息=%v (MQTT不可用)", req.StationID, req.Message)
+		logger.Infof("测试消息记录: 工位=%s, 消息=%v (MQTT不可用)", req.StationID, req.Message)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -411,19 +411,19 @@ func (h *HTTPServer) handleDisplayConfig(c *gin.Context) {
 	// log记录下完整的请求body，推送内容为json格式
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		log.Printf("读取屏显配置推送失败: %v", err)
+		logger.Infof("读取屏显配置推送失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取屏显配置推送失败",
 		})
 		return
 	}
 
-	log.Printf("收到屏显配置推送: 工位=%s, IP=%s, 内容=%s", stationID, c.ClientIP(), string(body))
+	logger.Infof("收到屏显配置推送: 工位=%s, IP=%s, 内容=%s", stationID, c.ClientIP(), string(body))
 
 	// 解析json
 	var displayConfig map[string]interface{}
 	if err := json.Unmarshal(body, &displayConfig); err != nil {
-		log.Printf("解析屏显配置推送失败: %v", err)
+		logger.Infof("解析屏显配置推送失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "解析屏显配置推送失败",
 		})
@@ -442,7 +442,7 @@ func (h *HTTPServer) handleSerioMessage(c *gin.Context) {
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		log.Printf("读取GIO推送失败: %v", err)
+		logger.Infof("读取GIO推送失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取GIO推送失败",
 		})
@@ -452,14 +452,14 @@ func (h *HTTPServer) handleSerioMessage(c *gin.Context) {
 	// 解析json
 	var gioMessage map[string]interface{}
 	if err := json.Unmarshal(body, &gioMessage); err != nil {
-		log.Printf("解析GIO推送失败: %v", err)
+		logger.Infof("解析GIO推送失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "解析GIO推送失败",
 		})
 		return
 	}
 
-	log.Printf("收到Serio推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
+	logger.Infof("收到Serio推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
@@ -471,11 +471,11 @@ func (h *HTTPServer) handleSerioMessage(c *gin.Context) {
 func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 	stationID := c.Param("station_id")
 
-	log.Printf("收到GIO推送: 工位=%s, IP=%s", stationID, c.ClientIP())
+	logger.Infof("收到GIO推送: 工位=%s, IP=%s", stationID, c.ClientIP())
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		log.Printf("读取GIO推送失败: %v", err)
+		logger.Infof("读取GIO推送失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取GIO推送失败",
 		})
@@ -485,14 +485,14 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 	// 解析json
 	var gioMessage map[string]interface{}
 	if err := json.Unmarshal(body, &gioMessage); err != nil {
-		log.Printf("解析GIO推送失败: %v", err)
+		logger.Infof("解析GIO推送失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "解析GIO推送失败",
 		})
 		return
 	}
 
-	log.Printf("收到GIO推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
+	logger.Infof("收到GIO推送: 工位=%s, IP=%s, 内容=%v", stationID, c.ClientIP(), gioMessage)
 
 	// 解析门禁状态数据
 	if alarmGioIn, ok := gioMessage["AlarmGioIn"].(map[string]interface{}); ok {
@@ -511,7 +511,7 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 							statusText = "关闭"
 						}
 
-						log.Printf("门禁状态更新: 工位=%s, 状态=%s, 源=%d, 值=%d",
+						logger.Infof("门禁状态更新: 工位=%s, 状态=%s, 源=%d, 值=%d",
 							stationID, statusText, int(source), int(value))
 					}
 				}
@@ -529,19 +529,19 @@ func (h *HTTPServer) handleDeviceTestOpe(c *gin.Context) {
 	stationID := c.Param("station_id")
 	ope := c.Param("ope")
 
-	log.Printf("收到设备测试: 工位=%s, IP=%s, 操作=%s", stationID, c.ClientIP(), ope)
+	logger.Infof("收到设备测试: 工位=%s, IP=%s, 操作=%s", stationID, c.ClientIP(), ope)
 
 	// 读取请求体
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		log.Printf("读取请求体失败: %v", err)
+		logger.Infof("读取请求体失败: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "读取请求体失败",
 		})
 		return
 	}
 
-	log.Printf("门禁推送内容: %s", string(body))
+	logger.Infof("门禁推送内容: %s", string(body))
 
 	if ope == "open" {
 		cmd := &service.PlateCommand{
@@ -553,9 +553,9 @@ func (h *HTTPServer) handleDeviceTestOpe(c *gin.Context) {
 		}
 		// 调用开门指令
 		h.manager.GetDeviceManager().ExecuteCommand(c.Request.Context(), cmd)
-		log.Printf("调用开门指令: 工位=%s, IP=%s", stationID, c.ClientIP())
+		logger.Infof("调用开门指令: 工位=%s, IP=%s", stationID, c.ClientIP())
 	} else if ope == "close" {
-		log.Printf("收到设备测试: 工位=%s, IP=%s, 操作=关门", stationID, c.ClientIP())
+		logger.Infof("收到设备测试: 工位=%s, IP=%s, 操作=关门", stationID, c.ClientIP())
 	} else if ope == "display" {
 
 	}

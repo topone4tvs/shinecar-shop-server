@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
+
 	"shop_server/config"
+	"shop_server/pkg/logger"
 	"shop_server/pkg/mqtt"
 )
 
@@ -27,7 +28,7 @@ func NewManager(cfg *config.Config, mqttClient *mqtt.Client, deviceManager *Devi
 
 // Start 启动所有服务
 func (m *Manager) Start(ctx context.Context) error {
-	log.Println("开始启动服务...")
+	logger.Infof("开始启动服务...")
 
 	// 创建消息路由器，传入共享的设备管理器
 	m.router = NewRouter(m.config, m.mqttClient, m.deviceManager)
@@ -37,22 +38,22 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("启动消息路由器失败: %w", err)
 	}
 
-	log.Println("所有服务启动成功")
+	logger.Infof("所有服务启动成功")
 	return nil
 }
 
 // Stop 停止所有服务
 func (m *Manager) Stop(ctx context.Context) error {
-	log.Println("开始停止服务...")
+	logger.Infof("开始停止服务...")
 
 	// 停止消息路由器
 	if m.router != nil {
 		if err := m.router.Stop(ctx); err != nil {
-			log.Printf("停止消息路由器失败: %v", err)
+			logger.Errorf("停止消息路由器失败: %v", err)
 		}
 	}
 
-	log.Println("所有服务已停止")
+	logger.Infof("所有服务已停止")
 	return nil
 }
 

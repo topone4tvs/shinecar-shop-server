@@ -171,7 +171,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 打开空调
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 4. 设置音量，并播放音乐
 		//haCmd := &HACommand{
@@ -205,7 +205,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 关闭空调
-		dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionFinish, nil)
 		// 4. 关闭音乐
 		//dm.callHaCommand(ctx, unionCmd.StationID, CommandHAPauseMusic, nil)
 	}

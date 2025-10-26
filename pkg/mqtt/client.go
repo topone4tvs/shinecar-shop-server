@@ -36,8 +36,9 @@ func NewClient(cfg *Config) (*Client, error) {
 	opts.SetPassword(cfg.Password)
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
-	opts.SetKeepAlive(15 * time.Second)
-	opts.SetPingTimeout(5 * time.Second)
+	opts.SetKeepAlive(60 * time.Second)
+	opts.SetPingTimeout(30 * time.Second)
+	opts.SetMaxReconnectInterval(10 * time.Second)
 
 	client := &Client{
 		client:   mqtt.NewClient(opts),

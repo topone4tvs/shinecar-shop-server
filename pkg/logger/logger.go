@@ -17,6 +17,10 @@ var (
 	// Logger 全局日志实例
 	Logger *zap.Logger
 	Sugar  *zap.SugaredLogger
+
+	// HeartbeatLogger heartbeat 专用日志实例
+	HeartbeatLogger *zap.Logger
+	HeartbeatSugar  *zap.SugaredLogger
 )
 
 // Config 日志配置
@@ -321,10 +325,121 @@ func customTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 
 // Sync 刷新日志缓冲
 func Sync() error {
+	var err error
 	if Logger != nil {
-		return Logger.Sync()
+		if e := Logger.Sync(); e != nil {
+			err = e
+		}
 	}
+	if HeartbeatLogger != nil {
+		if e := HeartbeatLogger.Sync(); e != nil {
+			err = e
+		}
+	}
+	return err
+}
+
+// InitHeartbeatLogger 初始化 heartbeat 专用日志实例
+func InitHeartbeatLogger(cfg *Config) error {
+	if cfg == nil {
+		cfg = DefaultConfig()
+		// 默认 heartbeat 日志文件路径
+		cfg.FilePath = "logs/heartbeat.log"
+		cfg.Console = false // heartbeat 日志默认不输出到控制台
+	}
+
+	// 确保日志目录存在
+	logDir := filepath.Dir(cfg.FilePath)
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return err
+	}
+
+	// 解析日志级别
+	level := zapcore.InfoLevel
+	switch cfg.Level {
+	case "debug":
+		level = zapcore.DebugLevel
+	case "info":
+		level = zapcore.InfoLevel
+	case "warn":
+		level = zapcore.WarnLevel
+	case "error":
+		level = zapcore.ErrorLevel
+	case "fatal":
+		level = zapcore.FatalLevel
+	}
+
+	// 编码器配置
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "time",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		MessageKey:     "msg",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalLevelEncoder,
+		EncodeTime:     customTimeEncoder,
+		EncodeDuration: zapcore.SecondsDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	// 创建按日期轮转的文件写入器
+	rotateWriter, err := NewDailyRotateWriter(cfg.FilePath, cfg.MaxAge, cfg.Compress)
+	if err != nil {
+		return err
+	}
+
+	var fileWriter io.Writer = rotateWriter
+
+	var core zapcore.Core
+	if cfg.Console {
+		// 同时输出到控制台和文件
+		consoleEncoder := zapcore.NewConsoleEncoder(encoderConfig)
+		fileEncoder := zapcore.NewJSONEncoder(encoderConfig)
+
+		consoleCore := zapcore.NewCore(
+			consoleEncoder,
+			zapcore.AddSync(os.Stdout),
+			level,
+		)
+
+		fileCore := zapcore.NewCore(
+			fileEncoder,
+			zapcore.AddSync(fileWriter),
+			level,
+		)
+
+		core = zapcore.NewTee(consoleCore, fileCore)
+	} else {
+		// 只输出到文件
+		fileEncoder := zapcore.NewJSONEncoder(encoderConfig)
+		core = zapcore.NewCore(
+			fileEncoder,
+			zapcore.AddSync(fileWriter),
+			level,
+		)
+	}
+
+	// 创建 logger
+	HeartbeatLogger = zap.New(
+		core,
+		zap.AddCaller(),
+		zap.AddCallerSkip(1), // 跳过封装函数，显示真实调用位置
+		zap.AddStacktrace(zapcore.ErrorLevel),
+	)
+
+	// 创建 Sugar logger
+	HeartbeatSugar = HeartbeatLogger.Sugar()
+
 	return nil
+}
+
+// HeartbeatInfof heartbeat 专用格式化信息日志
+func HeartbeatInfof(format string, args ...interface{}) {
+	if HeartbeatSugar != nil {
+		HeartbeatSugar.Infof(format, args...)
+	}
 }
 
 // 以下是封装的常用日志方法

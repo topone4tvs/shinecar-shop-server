@@ -21,6 +21,7 @@ const (
 	MessageTypeDevice = "device" // 设备控制
 	MessageTypeQuery  = "query"  // 状态查询
 	MessageTypeConfig = "config" // 配置更新
+	MessageTypeShop   = "shop"   // 店铺消息
 )
 
 // 支持的设备命令
@@ -39,6 +40,7 @@ const (
 	CommandGetStatus          = "get_status"           // 获取状态
 	CommandUnionStart         = "union_start"          // 联动订单开始
 	CommandUnionFinish        = "union_finish"         // 联动订单结束
+	CommandHeartbeat          = "heartbeat"            // 心跳
 )
 
 // 要操作的设备类型

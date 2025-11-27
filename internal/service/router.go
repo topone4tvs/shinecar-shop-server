@@ -62,7 +62,10 @@ func (r *Router) subscribeTopics() error {
 	// 构建订阅主题模式 - 用于接收上游消息
 	subscribePattern := fmt.Sprintf("shinecar/shop/%s/station/+/command/#", r.config.Shop.ID)
 
+	shopSubscribePattern := fmt.Sprintf("shinecar/shop/%s/command/#", r.config.Shop.ID)
+
 	// 订阅主题
+	r.mqttClient.SubscribePattern(shopSubscribePattern, r.handleMQTTShopMessage)
 	return r.mqttClient.SubscribePattern(subscribePattern, r.handleMQTTMessage)
 }
 
@@ -97,6 +100,23 @@ func (r *Router) handleMQTTMessage(topic string, payload []byte) error {
 	return r.processMessage(mqttMsg)
 }
 
+func (r *Router) handleMQTTShopMessage(topic string, payload []byte) error {
+	body, err := io.ReadAll(bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("读取payload失败: %w", err)
+	}
+
+	logger.Debugf("收到MQTT Shop 消息 - 主题: %s, 内容: %s", topic, string(body))
+
+	// 解析消息内容
+	mqttMsg, err := ParseMQTTMessage(payload)
+	if err != nil {
+		return fmt.Errorf("解析消息内容失败: %w", err)
+	}
+
+	return r.processMessage(mqttMsg)
+}
+
 // processMessage 处理消息
 func (r *Router) processMessage(msg *MQTTMessage) error {
 	logger.Infof("处理消息: %s", msg.String())
@@ -110,6 +130,8 @@ func (r *Router) processMessage(msg *MQTTMessage) error {
 		return r.processQueryMessage(ctx, msg)
 	case MessageTypeConfig:
 		return r.processConfigMessage(ctx, msg)
+	case MessageTypeShop:
+		return r.processShopMessage(ctx, msg)
 	default:
 		return fmt.Errorf("未知消息类型: %s", msg.Type)
 	}
@@ -180,6 +202,18 @@ func (r *Router) processConfigMessage(ctx context.Context, msg *MQTTMessage) err
 	}
 }
 
+// processShopMessage 处理店铺消息
+func (r *Router) processShopMessage(ctx context.Context, msg *MQTTMessage) error {
+	logger.Debugf("处理店铺消息: %s", msg.Command)
+
+	switch msg.Command {
+	case CommandHeartbeat:
+		return r.processHeartbeat(ctx, msg)
+	default:
+		return fmt.Errorf("不支持的店铺命令: %s", msg.Command)
+	}
+}
+
 // getDeviceStatus 获取设备状态
 func (r *Router) getDeviceStatus(stationID string) (interface{}, error) {
 	status, err := r.deviceManager.GetDeviceStatus(stationID)
@@ -230,6 +264,11 @@ func (r *Router) reloadConfig() error {
 	logger.Infof("重新加载配置...")
 	// 这里可以实现配置重新加载逻辑
 	// 目前只是日志记录
+	return nil
+}
+
+func (r *Router) processHeartbeat(ctx context.Context, msg *MQTTMessage) error {
+	logger.HeartbeatInfof("[shop-heartbeat]: %s", msg.Command)
 	return nil
 }
 

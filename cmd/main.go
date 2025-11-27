@@ -46,6 +46,18 @@ func main() {
 	}
 	defer logger.Sync()
 
+	// 初始化 heartbeat 专用日志系统
+	heartbeatLogConfig := &logger.Config{
+		Level:    cfg.Log.Level,
+		FilePath: "logs/heartbeat.log", // heartbeat 日志文件路径
+		MaxAge:   cfg.Log.MaxAge,
+		Compress: cfg.Log.Compress,
+		Console:  false, // heartbeat 日志不输出到控制台
+	}
+	if err := logger.InitHeartbeatLogger(heartbeatLogConfig); err != nil {
+		panic("初始化 heartbeat 日志系统失败: " + err.Error())
+	}
+
 	logger.Infof("启动洗车店智能设备管理系统...")
 	logger.Infof("配置加载成功: 环境=%s, 店铺=%s, 工位数量=%d", cfg.GetEnvironment(), cfg.Shop.Name, len(cfg.Shop.Stations))
 

@@ -172,7 +172,7 @@ func (m *HeartbeatMonitor) checkHeartbeat() (bool, error) {
 	}
 
 	// Debug: 记录读取到的最后几行
-	fmt.Printf("[%s] DEBUG: 读取到 %d 行日志（从文件末尾）\n", now.Format("2006-01-02 15:04:05"), len(lines))
+	//fmt.Printf("[%s] DEBUG: 读取到 %d 行日志（从文件末尾）\n", now.Format("2006-01-02 15:04:05"), len(lines))
 
 	var lastHeartbeatTime time.Time
 	var lastHeartbeatLine string
@@ -208,11 +208,11 @@ func (m *HeartbeatMonitor) checkHeartbeat() (bool, error) {
 			}
 			if parseErr == nil {
 				// Debug: 记录解析成功的心跳
-				fmt.Printf("[%s] DEBUG: 找到心跳消息，时间: %s (原始: %s), 行内容: %s\n",
-					now.Format("2006-01-02 15:04:05"),
-					t.Format("2006-01-02 15:04:05.000"),
-					entry.Time,
-					line[:min(100, len(line))])
+				//fmt.Printf("[%s] DEBUG: 找到心跳消息，时间: %s (原始: %s), 行内容: %s\n",
+				//	now.Format("2006-01-02 15:04:05"),
+				//	t.Format("2006-01-02 15:04:05.000"),
+				//	entry.Time,
+				//	line[:min(100, len(line))])
 				if t.After(lastHeartbeatTime) {
 					lastHeartbeatTime = t
 					lastHeartbeatLine = line
@@ -380,7 +380,7 @@ func (m *HeartbeatMonitor) checkAndRestart() {
 	}
 
 	if found {
-		fmt.Printf("[%s] ✓ 心跳正常\n", time.Now().Format("2006-01-02 15:04:05"))
+		//fmt.Printf("[%s] ✓ 心跳正常\n", time.Now().Format("2006-01-02 15:04:05"))
 	} else {
 		fmt.Printf("[%s] ✗ 心跳丢失，执行重启...\n", time.Now().Format("2006-01-02 15:04:05"))
 		if err := m.restartDocker(); err != nil {

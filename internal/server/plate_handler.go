@@ -284,6 +284,9 @@ func (h *HTTPServer) processIOTrigger(stationID string, alarm *AlarmGioIn) (inte
 		logger.Infof("发布IO触发事件失败: %v", err)
 	}
 
+	h.manager.GetDeviceManager().ApplyHardwareGateReading(
+		stationID, triggerResult.Source, triggerResult.Value, service.GateChannelPlateAlarmGioIn)
+
 	return nil, nil
 }
 

@@ -501,10 +501,8 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 				// 直接尝试获取 source 和 value，使用类型断言
 				if source, ok := triggerResult["source"].(float64); ok {
 					if value, ok := triggerResult["value"].(float64); ok {
-						// 更新门禁状态
-						h.manager.GetDeviceManager().UpdateGateStatus(stationID, int(source), int(value))
+						h.manager.GetDeviceManager().ApplyHardwareGateReading(stationID, int(source), int(value), service.GateChannelGioHTTP)
 
-						// 判断门禁状态
 						isOpen := !(int(source) == 0 && int(value) == 0)
 						statusText := "开启"
 						if !isOpen {

@@ -10,6 +10,12 @@ import (
 	"shop_server/pkg/logger"
 )
 
+// GateChannelGioHTTP GIO 专用 HTTP 推送路径。
+const GateChannelGioHTTP = "gio_http"
+
+// GateChannelPlateAlarmGioIn plate 推送中的 AlarmGioIn。
+const GateChannelPlateAlarmGioIn = "plate_alarm_gio_in"
+
 // DeviceService 设备服务接口
 type DeviceService interface {
 	GetDeviceType() string
@@ -29,20 +35,21 @@ type DeviceStatus struct {
 	// 移除GioStatus字段，门禁状态单独管理
 }
 
-// GioStatus 门禁状态
+// GateStatus 门禁当前快照状态。
 type GateStatus struct {
 	StationID  string    `json:"station_id"`  // 工位ID
 	IsOpen     bool      `json:"is_open"`     // 闸门是否开启
 	LastUpdate time.Time `json:"last_update"` // 最后更新时间
 	Source     int       `json:"source"`      // 触发源
 	Value      int       `json:"value"`       // 触发值
+	Channel    string    `json:"channel"`     // 最近一次读数来源
 }
 
 // DeviceManager 设备管理器
 type DeviceManager struct {
 	config         *config.Config
 	deviceStatus   map[string]*DeviceStatus // 设备在线状态
-	gateStatus     map[string]*GateStatus   // 门禁状态（独立管理）
+	gateStatus     map[string]*GateStatus   // 门禁状态（独立管理，仅当前快照）
 	plateResponses map[string][]interface{} // 待处理的门禁响应队列
 	mutex          sync.RWMutex
 	haService      *HaService
@@ -564,27 +571,47 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 	}
 }
 
-// UpdateGateStatus 更新门禁状态
-func (dm *DeviceManager) UpdateGateStatus(stationID string, source int, value int) {
+// ApplyHardwareGateReading 根据硬件上报的 source/value 更新当前门禁快照；仅在开合语义变化（或首次有读数）时写 [门禁变迁] 日志落盘（由全局 logger 配置决定）。
+func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, value int, channel string) {
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	// 判断门禁状态：source=0 && value=0 表示门已关闭
-	isOpen := !(source == 0 && value == 0)
+	toOpen := !(source == 0 && value == 0)
+	prev, hadPrev := dm.gateStatus[stationID]
+	changed := !hadPrev || prev.IsOpen != toOpen
 
-	// 更新门禁状态
-	gateStatus := &GateStatus{
+	now := time.Now()
+	dm.gateStatus[stationID] = &GateStatus{
 		StationID:  stationID,
-		IsOpen:     isOpen,
-		LastUpdate: time.Now(),
+		IsOpen:     toOpen,
+		LastUpdate: now,
 		Source:     source,
 		Value:      value,
+		Channel:    channel,
 	}
 
-	dm.gateStatus[stationID] = gateStatus
+	if !changed {
+		return
+	}
 
-	logger.Infof("门禁状态已更新: 工位=%s, 开启=%t, 源=%d, 值=%d, 指针=%p",
-		stationID, isOpen, source, value, gateStatus)
+	var fromOpen *bool
+	if hadPrev {
+		v := prev.IsOpen
+		fromOpen = &v
+	}
+
+	if fromOpen == nil {
+		logger.Infof("[门禁变迁] station_id=%s from_open=unknown to_open=%t source=%d value=%d channel=%s ts_unix=%d",
+			stationID, toOpen, source, value, channel, now.Unix())
+	} else {
+		logger.Infof("[门禁变迁] station_id=%s from_open=%t to_open=%t source=%d value=%d channel=%s ts_unix=%d",
+			stationID, *fromOpen, toOpen, source, value, channel, now.Unix())
+	}
+}
+
+// UpdateGateStatus 更新门禁状态（兼容旧调用；channel 为空）。
+func (dm *DeviceManager) UpdateGateStatus(stationID string, source int, value int) {
+	dm.ApplyHardwareGateReading(stationID, source, value, "")
 }
 
 // IsGateOpen 检查闸门是否开启

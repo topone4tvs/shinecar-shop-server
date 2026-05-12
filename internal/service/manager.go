@@ -62,6 +62,11 @@ func (m *Manager) GetRouter() *Router {
 	return m.router
 }
 
+// GetEventPublisher 获取事件发布器。
+func (m *Manager) GetEventPublisher() EventPublisher {
+	return m.router
+}
+
 // GetDeviceManager 获取设备管理器
 func (m *Manager) GetDeviceManager() *DeviceManager {
 	return m.deviceManager

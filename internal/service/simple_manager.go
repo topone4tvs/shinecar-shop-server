@@ -38,6 +38,11 @@ func (m *SimpleManager) GetRouter() *Router {
 	return nil
 }
 
+// GetEventPublisher 获取事件发布器（简化版本不包含MQTT）。
+func (m *SimpleManager) GetEventPublisher() EventPublisher {
+	return nil
+}
+
 // GetDeviceManager 获取设备管理器
 func (m *SimpleManager) GetDeviceManager() *DeviceManager {
 	return m.deviceManager

@@ -14,16 +14,22 @@ import (
 	"shop_server/pkg/mqtt"
 )
 
+// MQTTClient 定义 Router 依赖的 MQTT 能力，便于单测注入 fake client。
+type MQTTClient interface {
+	SubscribePattern(pattern string, handler mqtt.MessageHandler) error
+	Publish(topic string, payload []byte) error
+}
+
 // Router 消息路由器
 type Router struct {
 	config        *config.Config
-	mqttClient    *mqtt.Client
+	mqttClient    MQTTClient
 	converter     MessageConverter
 	deviceManager *DeviceManager
 }
 
 // NewRouter 创建消息路由器
-func NewRouter(cfg *config.Config, mqttClient *mqtt.Client, deviceManager *DeviceManager) *Router {
+func NewRouter(cfg *config.Config, mqttClient MQTTClient, deviceManager *DeviceManager) *Router {
 	router := &Router{
 		config:        cfg,
 		mqttClient:    mqttClient,

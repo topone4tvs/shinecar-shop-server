@@ -501,16 +501,35 @@ func (h *HTTPServer) handleGioMessage(c *gin.Context) {
 				// 直接尝试获取 source 和 value，使用类型断言
 				if source, ok := triggerResult["source"].(float64); ok {
 					if value, ok := triggerResult["value"].(float64); ok {
-						h.manager.GetDeviceManager().ApplyHardwareGateReading(stationID, int(source), int(value), service.GateChannelGioHTTP)
+						snapshot, changed := h.manager.GetDeviceManager().ApplyHardwareGateReading(stationID, int(source), int(value), service.GateChannelGioHTTP)
 
-						isOpen := !(int(source) == 0 && int(value) == 0)
+						isOpen := snapshot.IsOpen
 						statusText := "开启"
+						status := "open"
 						if !isOpen {
 							statusText = "关闭"
+							status = "closed"
 						}
 
 						logger.Infof("门禁状态更新: 工位=%s, 状态=%s, 源=%d, 值=%d",
 							stationID, statusText, int(source), int(value))
+
+						if changed {
+							event := MqttEvent{
+								"type":       "gate_status",
+								"station_id": stationID,
+								"timestamp":  snapshot.LastUpdate.Unix(),
+								"is_open":    isOpen,
+								"status":     status,
+								"source":     snapshot.Source,
+								"value":      snapshot.Value,
+								"channel":    snapshot.Channel,
+								"raw":        gioMessage,
+							}
+							if err := h.publishToMQTTEvent(stationID, "gate_status", event); err != nil {
+								logger.Infof("发布门禁状态事件失败: %v", err)
+							}
+						}
 					}
 				}
 			}

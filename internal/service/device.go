@@ -572,7 +572,7 @@ func (dm *DeviceManager) updatePlateDeviceStatus(stationID string, online bool, 
 }
 
 // ApplyHardwareGateReading 根据硬件上报的 source/value 更新当前门禁快照；仅在开合语义变化（或首次有读数）时写 [门禁变迁] 日志落盘（由全局 logger 配置决定）。
-func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, value int, channel string) {
+func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, value int, channel string) (GateStatus, bool) {
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
@@ -581,7 +581,7 @@ func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, valu
 	changed := !hadPrev || prev.IsOpen != toOpen
 
 	now := time.Now()
-	dm.gateStatus[stationID] = &GateStatus{
+	snapshot := GateStatus{
 		StationID:  stationID,
 		IsOpen:     toOpen,
 		LastUpdate: now,
@@ -589,9 +589,10 @@ func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, valu
 		Value:      value,
 		Channel:    channel,
 	}
+	dm.gateStatus[stationID] = &snapshot
 
 	if !changed {
-		return
+		return snapshot, false
 	}
 
 	var fromOpen *bool
@@ -607,6 +608,8 @@ func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, valu
 		logger.Infof("[门禁变迁] station_id=%s from_open=%t to_open=%t source=%d value=%d channel=%s ts_unix=%d",
 			stationID, *fromOpen, toOpen, source, value, channel, now.Unix())
 	}
+
+	return snapshot, true
 }
 
 // UpdateGateStatus 更新门禁状态（兼容旧调用；channel 为空）。

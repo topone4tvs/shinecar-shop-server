@@ -1,3 +1,5 @@
+//go:build manual
+
 package main
 
 import (
@@ -39,4 +41,3 @@ func main() {
 	logger.Infof("  3. 服务不重启时，后台协程每分钟检查一次日期变化")
 	logger.Infof("  4. 自动删除超过%d天的旧日志", config.MaxAge)
 }
-

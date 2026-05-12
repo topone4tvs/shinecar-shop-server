@@ -251,6 +251,7 @@ func (m *HeartbeatMonitor) checkHeartbeat() (bool, error) {
 		// Debug: 记录时间差计算过程
 		fmt.Printf("[%s] DEBUG: 时间差计算 - 当前时间: %s, 心跳时间: %s, 时间差: %.1f秒, 检查窗口: %.0f秒\n",
 			now.Format("2006-01-02 15:04:05.000"),
+			now.Format("2006-01-02 15:04:05.000"),
 			lastHeartbeatTime.Format("2006-01-02 15:04:05.000"),
 			timeSinceLastHeartbeat.Seconds(),
 			checkWindow.Seconds())

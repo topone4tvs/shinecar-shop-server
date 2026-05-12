@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -11,6 +12,42 @@ import (
 	"shop_server/config"
 	"shop_server/internal/service"
 )
+
+type publishedEvent struct {
+	stationID   string
+	messageType string
+	subType     string
+	data        interface{}
+}
+
+type fakeEventPublisher struct {
+	events []publishedEvent
+}
+
+func (p *fakeEventPublisher) PublishToMQTT(stationID, messageType, subType string, data interface{}) error {
+	p.events = append(p.events, publishedEvent{
+		stationID:   stationID,
+		messageType: messageType,
+		subType:     subType,
+		data:        data,
+	})
+	return nil
+}
+
+type fakeManager struct {
+	deviceManager *service.DeviceManager
+	publisher     service.EventPublisher
+}
+
+func (m *fakeManager) Start(ctx context.Context) error { return nil }
+func (m *fakeManager) Stop(ctx context.Context) error  { return nil }
+func (m *fakeManager) GetRouter() *service.Router      { return nil }
+func (m *fakeManager) GetEventPublisher() service.EventPublisher {
+	return m.publisher
+}
+func (m *fakeManager) GetDeviceManager() *service.DeviceManager {
+	return m.deviceManager
+}
 
 func testConfig() *config.Config {
 	return &config.Config{
@@ -31,6 +68,17 @@ func newTestHTTPServer() (*HTTPServer, *service.DeviceManager) {
 	deviceManager := service.NewDeviceManager(cfg)
 	manager := service.NewSimpleManager(cfg, deviceManager)
 	return NewHTTPServer(cfg, manager), deviceManager
+}
+
+func newTestHTTPServerWithPublisher() (*HTTPServer, *service.DeviceManager, *fakeEventPublisher) {
+	cfg := testConfig()
+	deviceManager := service.NewDeviceManager(cfg)
+	publisher := &fakeEventPublisher{}
+	manager := &fakeManager{
+		deviceManager: deviceManager,
+		publisher:     publisher,
+	}
+	return NewHTTPServer(cfg, manager), deviceManager, publisher
 }
 
 func TestHandleDeviceHeartbeatUpdatesStatus(t *testing.T) {
@@ -137,5 +185,126 @@ func TestHandleGioMessageUpdatesGateStatus(t *testing.T) {
 	}
 	if !deviceManager.IsGateOpen("001") {
 		t.Fatalf("expected gate to be open after GIO source/value 1/1")
+	}
+}
+
+func TestHandlePlateMessagePublishesPlateRecognitionEvent(t *testing.T) {
+	initTestLogger(t)
+
+	httpServer, _, publisher := newTestHTTPServerWithPublisher()
+	body := []byte(`{
+		"AlarmInfoPlate": {
+			"channel": 0,
+			"deviceName": "SIM-PLATE-DEVICE",
+			"ipaddr": "192.168.1.100",
+			"serialno": "sim-serial-001",
+			"result": {
+				"PlateResult": {
+					"license": "浙A73J2W",
+					"confidence": 95,
+					"colorType": 1,
+					"type": 1,
+					"direction": 4,
+					"plateid": 12345,
+					"isoffline": 0,
+					"is_fake_plate": 0,
+					"timeStamp": {
+						"Timeval": {
+							"sec": 1710000000
+						}
+					},
+					"location": {
+						"RECT": {
+							"left": 100,
+							"top": 200,
+							"right": 300,
+							"bottom": 400
+						}
+					}
+				}
+			}
+		}
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/plate/station/001", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	httpServer.router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("expected one published event, got %d", len(publisher.events))
+	}
+
+	event := publisher.events[0]
+	if event.stationID != "001" || event.messageType != "device_event" || event.subType != "plate_recognition" {
+		t.Fatalf("unexpected event envelope: %+v", event)
+	}
+	data, ok := event.data.(MqttEvent)
+	if !ok {
+		t.Fatalf("expected MqttEvent data, got %T", event.data)
+	}
+	if data["type"] != "plate_recognition" || data["station_id"] != "001" {
+		t.Fatalf("unexpected event data: %+v", data)
+	}
+	plate, ok := data["plate"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected plate data, got %+v", data["plate"])
+	}
+	if plate["license"] != "浙A73J2W" {
+		t.Fatalf("unexpected plate license: %+v", plate)
+	}
+}
+
+func TestHandlePlateMessagePublishesIOTriggerEvent(t *testing.T) {
+	initTestLogger(t)
+
+	httpServer, deviceManager, publisher := newTestHTTPServerWithPublisher()
+	body := []byte(`{
+		"AlarmGioIn": {
+			"deviceName": "SIM-PLATE-DEVICE",
+			"ipaddr": "192.168.1.100",
+			"serialno": "sim-serial-001",
+			"result": {
+				"source": 1,
+				"value": 1
+			}
+		}
+	}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/plate/station/001", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	httpServer.router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("expected one published event, got %d", len(publisher.events))
+	}
+
+	event := publisher.events[0]
+	if event.stationID != "001" || event.messageType != "device_event" || event.subType != "io_trigger" {
+		t.Fatalf("unexpected event envelope: %+v", event)
+	}
+	if !deviceManager.IsGateOpen("001") {
+		t.Fatalf("expected IO trigger to update gate status")
+	}
+
+	data, ok := event.data.(MqttEvent)
+	if !ok {
+		t.Fatalf("expected MqttEvent data, got %T", event.data)
+	}
+	ioData, ok := data["io"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected io data, got %+v", data["io"])
+	}
+	if ioData["source"] != 1 || ioData["value"] != 1 {
+		t.Fatalf("unexpected io data: %+v", ioData)
 	}
 }

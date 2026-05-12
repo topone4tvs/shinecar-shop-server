@@ -144,9 +144,13 @@ type OsdConfig struct {
 type MqttEvent map[string]interface{}
 
 func (h *HTTPServer) publishToMQTTEvent(stationID, eventType string, event MqttEvent) error {
-	router := h.manager.GetRouter()
+	publisher := h.manager.GetEventPublisher()
+	if publisher == nil {
+		logger.Infof("MQTT发布器不可用，跳过事件发布: 工位=%s, 类型=%s", stationID, eventType)
+		return nil
+	}
 	// 使用统一的发布topic格式
-	return router.PublishToMQTT(stationID, "device_event", eventType, event)
+	return publisher.PublishToMQTT(stationID, "device_event", eventType, event)
 }
 
 // parsePlateMessage 解析门禁设备推送消息

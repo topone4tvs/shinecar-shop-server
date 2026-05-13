@@ -49,6 +49,8 @@ func (c *DefaultMessageConverter) ConvertToDeviceCommand(msg *MQTTMessage) (Devi
 		return c.createHACommand(baseCmd, msg)
 	case DeviceTypeUnion:
 		return c.createUnionCommand(baseCmd, msg)
+	case DeviceTypeComposite:
+		return c.createCompositeCommand(baseCmd, msg)
 	default:
 		return baseCmd, nil
 	}
@@ -83,6 +85,8 @@ func (c *DefaultMessageConverter) getDeviceTypeFromCommand(command string) (stri
 		return DeviceTypePlate, nil
 	case CommandHAControl, CommandHANotice:
 		return DeviceTypeHA, nil
+	case CommandCompositeCommand:
+		return DeviceTypeComposite, nil
 	case CommandUnionStart, CommandUnionFinish:
 		return DeviceTypeUnion, nil
 	case CommandGetStatus:
@@ -157,6 +161,48 @@ func (c *DefaultMessageConverter) createHACommand(baseCmd *BaseDeviceCommand, ms
 func (c *DefaultMessageConverter) createUnionCommand(baseCmd *BaseDeviceCommand, msg *MQTTMessage) (DeviceCommand, error) {
 	cmd := &UnionCommand{
 		BaseDeviceCommand: *baseCmd,
+	}
+
+	return cmd, nil
+}
+
+func (c *DefaultMessageConverter) createCompositeCommand(baseCmd *BaseDeviceCommand, msg *MQTTMessage) (DeviceCommand, error) {
+	cmd := &CompositeCommand{
+		BaseDeviceCommand: *baseCmd,
+	}
+
+	if scene, ok := msg.Data["scene"].(string); ok {
+		cmd.Scene = scene
+	}
+	if continueOnError, ok := msg.Data["continue_on_error"].(bool); ok {
+		cmd.ContinueOnError = continueOnError
+	}
+
+	rawCommands, ok := msg.Data["commands"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("复合指令缺少commands参数")
+	}
+
+	for _, raw := range rawCommands {
+		item, ok := raw.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("复合指令commands格式错误")
+		}
+
+		subCmd := CompositeSubCommand{}
+		if command, ok := item["command"].(string); ok {
+			subCmd.Command = command
+		}
+		if target, ok := item["target"].(string); ok {
+			subCmd.Target = target
+		}
+		if action, ok := item["action"].(string); ok {
+			subCmd.Action = action
+		}
+		if data, ok := item["data"].(map[string]interface{}); ok {
+			subCmd.Data = data
+		}
+		cmd.Commands = append(cmd.Commands, subCmd)
 	}
 
 	return cmd, nil
@@ -240,4 +286,39 @@ func (h *HACommand) GetServiceData() map[string]interface{} {
 
 type UnionCommand struct {
 	BaseDeviceCommand
+}
+
+type CompositeSubCommand struct {
+	Command string                 `json:"command"`
+	Target  string                 `json:"target"`
+	Action  string                 `json:"action"`
+	Data    map[string]interface{} `json:"data,omitempty"`
+}
+
+type CompositeCommand struct {
+	BaseDeviceCommand
+	Scene           string                `json:"scene,omitempty"`
+	ContinueOnError bool                  `json:"continue_on_error"`
+	Commands        []CompositeSubCommand `json:"commands"`
+}
+
+func (c *CompositeCommand) Validate() error {
+	if err := c.BaseDeviceCommand.Validate(); err != nil {
+		return err
+	}
+	if len(c.Commands) == 0 {
+		return fmt.Errorf("复合指令commands不能为空")
+	}
+	for i, subCmd := range c.Commands {
+		if subCmd.Command == "" {
+			return fmt.Errorf("复合指令第%d条缺少command", i)
+		}
+		if subCmd.Target == "" {
+			return fmt.Errorf("复合指令第%d条缺少target", i)
+		}
+		if subCmd.Action == "" {
+			return fmt.Errorf("复合指令第%d条缺少action", i)
+		}
+	}
+	return nil
 }

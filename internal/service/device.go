@@ -84,6 +84,8 @@ func (dm *DeviceManager) ExecuteCommand(ctx context.Context, cmd DeviceCommand) 
 		return dm.executeHACommand(ctx, cmd)
 	case DeviceTypeUnion:
 		return dm.executeUnionCommand(ctx, cmd)
+	case DeviceTypeComposite:
+		return dm.executeCompositeCommand(ctx, cmd)
 	default:
 		err := fmt.Errorf("不支持的设备类型: %s", cmd.GetDeviceType())
 		return dm.createErrorResponse(cmd, err), nil
@@ -410,6 +412,105 @@ func (dm *DeviceManager) executeHACommand(ctx context.Context, cmd DeviceCommand
 	}
 
 	return dm.createSuccessResponse(cmd, responseData), nil
+}
+
+func (dm *DeviceManager) executeCompositeCommand(ctx context.Context, cmd DeviceCommand) (DeviceResponse, error) {
+	compositeCmd, ok := cmd.(*CompositeCommand)
+	if !ok {
+		err := fmt.Errorf("无效的复合命令类型")
+		return dm.createErrorResponse(cmd, err), nil
+	}
+
+	results := make([]map[string]interface{}, 0, len(compositeCmd.Commands))
+	var firstErr error
+
+	for _, subCmd := range compositeCmd.Commands {
+		result := map[string]interface{}{
+			"command": subCmd.Command,
+			"target":  subCmd.Target,
+			"action":  subCmd.Action,
+			"success": true,
+		}
+
+		err := dm.executeCompositeSubCommand(ctx, compositeCmd.StationID, subCmd)
+		if err != nil {
+			result["success"] = false
+			result["error"] = err.Error()
+			if firstErr == nil {
+				firstErr = err
+			}
+			results = append(results, result)
+			if !compositeCmd.ContinueOnError {
+				return dm.createErrorResponse(cmd, err), nil
+			}
+			continue
+		}
+
+		results = append(results, result)
+	}
+
+	responseData := map[string]interface{}{
+		"scene":             compositeCmd.Scene,
+		"continue_on_error": compositeCmd.ContinueOnError,
+		"results":           results,
+	}
+
+	if firstErr != nil {
+		responseData["partial_success"] = true
+		responseData["error"] = firstErr.Error()
+	}
+
+	return dm.createSuccessResponse(cmd, responseData), nil
+}
+
+func (dm *DeviceManager) executeCompositeSubCommand(ctx context.Context, stationID string, subCmd CompositeSubCommand) error {
+	switch subCmd.Command {
+	case CommandHAControl:
+		return dm.executeCompositeHAControl(ctx, stationID, subCmd)
+	default:
+		return fmt.Errorf("不支持的复合子命令: %s", subCmd.Command)
+	}
+}
+
+func (dm *DeviceManager) executeCompositeHAControl(ctx context.Context, stationID string, subCmd CompositeSubCommand) error {
+	entityID, err := dm.getHAEntityIDByTarget(stationID, subCmd.Target)
+	if err != nil {
+		return err
+	}
+
+	switch subCmd.Action {
+	case DeviceOpeTurnOn:
+		return dm.haService.TurnOn(ctx, entityID)
+	case DeviceOpeTurnOff:
+		return dm.haService.TurnOff(ctx, entityID)
+	default:
+		return fmt.Errorf("不支持的HA复合动作: target=%s action=%s", subCmd.Target, subCmd.Action)
+	}
+}
+
+func (dm *DeviceManager) getHAEntityIDByTarget(stationID string, target string) (string, error) {
+	station, err := dm.config.GetStationByID(stationID)
+	if err != nil {
+		return "", err
+	}
+	if !station.Devices.HA.Enable {
+		return "", fmt.Errorf("工位 %s 的HomeAssistant设备未启用", stationID)
+	}
+
+	switch target {
+	case "air_conditioner":
+		if station.Devices.HA.AirConditioner == "" {
+			return "", fmt.Errorf("工位 %s 未配置空调设备", stationID)
+		}
+		return station.Devices.HA.AirConditioner, nil
+	case "ventilation":
+		if station.Devices.HA.Ventilation == "" {
+			return "", fmt.Errorf("工位 %s 未配置通风设备", stationID)
+		}
+		return station.Devices.HA.Ventilation, nil
+	default:
+		return "", fmt.Errorf("不支持的HA目标: %s", target)
+	}
 }
 
 // UpdateDeviceStatus 更新设备状态

@@ -139,6 +139,50 @@ func TestRouterHandleMQTTMessageOpenGate(t *testing.T) {
 	}
 }
 
+func TestRouterHandleMQTTMessageCompositeCommand(t *testing.T) {
+	initTestLogger(t)
+
+	fakeClient := newFakeMQTTClient()
+	router := NewRouter(testConfig(), fakeClient, NewDeviceManager(testConfig()))
+
+	msg := MQTTMessage{
+		Type:      MessageTypeDevice,
+		Command:   CommandCompositeCommand,
+		ShopID:    "001",
+		StationID: "001",
+		Data: map[string]interface{}{
+			"scene":             "gate_open_with_order",
+			"continue_on_error": true,
+			"commands": []interface{}{
+				map[string]interface{}{
+					"command": CommandHAControl,
+					"target":  "air_conditioner",
+					"action":  DeviceOpeTurnOn,
+				},
+				map[string]interface{}{
+					"command": CommandHAControl,
+					"target":  "ventilation",
+					"action":  DeviceOpeTurnOff,
+				},
+			},
+		},
+		Timestamp: 1710000000,
+	}
+	payload, err := msg.ToJSON()
+	if err != nil {
+		t.Fatalf("failed to marshal mqtt message: %v", err)
+	}
+
+	err = router.handleMQTTMessage("shinecar/shop/001/station/001/command", payload)
+	if err != nil {
+		t.Fatalf("handleMQTTMessage returned error: %v", err)
+	}
+
+	if len(fakeClient.published) != 0 {
+		t.Fatalf("expected no failure response to be published, got %d", len(fakeClient.published))
+	}
+}
+
 func TestRouterRejectsMismatchedShop(t *testing.T) {
 	initTestLogger(t)
 

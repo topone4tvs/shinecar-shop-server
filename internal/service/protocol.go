@@ -37,6 +37,7 @@ const (
 	CommandHAPauseMusic       = "ha_pause_music"       // HomeAssistant通知
 	CommandHASetVolume        = "ha_set_volume"        // HomeAssistant通知
 	CommandHAExecuteDirective = "ha_execute_directive" // HomeAssistant通知
+	CommandCompositeCommand   = "composite_command"    // 复合指令
 	CommandGetStatus          = "get_status"           // 获取状态
 	CommandUnionStart         = "union_start"          // 联动订单开始
 	CommandUnionFinish        = "union_finish"         // 联动订单结束
@@ -45,9 +46,10 @@ const (
 
 // 要操作的设备类型
 const (
-	DeviceTypeUnion = "union" // 联动类型
-	DeviceTypePlate = "plate" // 门禁系统
-	DeviceTypeHA    = "ha"    // HomeAssistant
+	DeviceTypeUnion     = "union"     // 联动类型
+	DeviceTypePlate     = "plate"     // 门禁系统
+	DeviceTypeHA        = "ha"        // HomeAssistant
+	DeviceTypeComposite = "composite" // 复合指令
 )
 
 // DeviceCommand 设备命令接口
@@ -200,7 +202,7 @@ func isValidMessageType(msgType string) bool {
 func isValidCommand(command string) bool {
 	switch command {
 	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger,
-		CommandHAControl, CommandHANotice, CommandGetStatus, CommandUnionStart, CommandUnionFinish:
+		CommandHAControl, CommandHANotice, CommandCompositeCommand, CommandGetStatus, CommandUnionStart, CommandUnionFinish:
 		return true
 	default:
 		return false

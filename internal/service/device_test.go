@@ -1,6 +1,10 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -121,5 +125,72 @@ func TestDeviceManagerApplyHardwareGateReading(t *testing.T) {
 	}
 	if !status.IsOpen || status.Source != 1 || status.Value != 1 || status.Channel != GateChannelPlateAlarmGioIn {
 		t.Fatalf("unexpected open gate status: %+v", status)
+	}
+}
+
+func TestDeviceManagerUnionCommandsControlAirConditioner(t *testing.T) {
+	initTestLogger(t)
+
+	var serviceCalls []string
+	haServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/states/climate.station_001_air_conditioner":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"entity_id": "climate.station_001_air_conditioner",
+				"state":     "off",
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/services/climate/turn_on":
+			serviceCalls = append(serviceCalls, "turn_on")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/services/climate/turn_off":
+			serviceCalls = append(serviceCalls, "turn_off")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("unexpected HA request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer haServer.Close()
+
+	cfg := testConfig()
+	cfg.Devices.HA.BaseURL = haServer.URL
+	dm := NewDeviceManager(cfg)
+	ctx := context.Background()
+
+	startResp, err := dm.ExecuteCommand(ctx, &UnionCommand{
+		BaseDeviceCommand: BaseDeviceCommand{
+			DeviceType: DeviceTypeUnion,
+			Command:    CommandUnionStart,
+			StationID:  "001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("union start returned error: %v", err)
+	}
+	if !startResp.IsSuccess() {
+		t.Fatalf("expected union start success, got error: %v", startResp.GetError())
+	}
+
+	finishResp, err := dm.ExecuteCommand(ctx, &UnionCommand{
+		BaseDeviceCommand: BaseDeviceCommand{
+			DeviceType: DeviceTypeUnion,
+			Command:    CommandUnionFinish,
+			StationID:  "001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("union finish returned error: %v", err)
+	}
+	if !finishResp.IsSuccess() {
+		t.Fatalf("expected union finish success, got error: %v", finishResp.GetError())
+	}
+
+	if len(serviceCalls) != 2 {
+		t.Fatalf("expected 2 HA service calls, got %d: %+v", len(serviceCalls), serviceCalls)
+	}
+	if serviceCalls[0] != "turn_on" || serviceCalls[1] != "turn_off" {
+		t.Fatalf("unexpected HA service calls: %+v", serviceCalls)
 	}
 }

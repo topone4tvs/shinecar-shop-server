@@ -64,7 +64,6 @@ func testConfigWithoutHA() *config.Config {
 						HA: config.HADeviceConfig{
 							Enable:         true,
 							AirConditioner: "climate.test_air_conditioner",
-							Ventilation:    "switch.test_ventilation",
 						},
 					},
 				},

@@ -483,6 +483,9 @@ func (dm *DeviceManager) executeCompositeHAControl(ctx context.Context, stationI
 	if err != nil {
 		return err
 	}
+	if entityID == "" {
+		return nil
+	}
 
 	switch subCmd.Action {
 	case DeviceOpeTurnOn:
@@ -510,10 +513,8 @@ func (dm *DeviceManager) getHAEntityIDByTarget(stationID string, target string) 
 		}
 		return station.Devices.HA.AirConditioner, nil
 	case "ventilation":
-		if station.Devices.HA.Ventilation == "" {
-			return "", fmt.Errorf("工位 %s 未配置通风设备", stationID)
-		}
-		return station.Devices.HA.Ventilation, nil
+		logger.Infof("通风设备暂未启用，忽略HA复合目标: station_id=%s target=%s", stationID, target)
+		return "", nil
 	default:
 		return "", fmt.Errorf("不支持的HA目标: %s", target)
 	}

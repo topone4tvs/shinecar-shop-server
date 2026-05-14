@@ -178,7 +178,7 @@ HTTP 入口：
 
 - 店铺标识：`001`
 - 工位标识：`001`、`002`
-- 每个工位配置门禁 endpoint、HomeAssistant 空调、通风、音箱、播放器等实体。
+- 每个工位配置门禁 endpoint、HomeAssistant 空调、音箱、播放器等实体；通风设备暂未启用，控制方式待确认。
 
 ## 3. 项目关系
 
@@ -202,7 +202,7 @@ flowchart LR
   ShopServer --> Gate["门禁/车牌识别设备"]
   Gate --> ShopServer
   ShopServer --> HA["HomeAssistant"]
-  HA --> Device["空调/通风/音箱/播放器"]
+  HA --> Device["空调/音箱/播放器"]
 
   CaddyCloud["云端 Caddy"] --> API
   CaddyShop["门店 Caddy"] --> ShopServer
@@ -293,8 +293,9 @@ shinecar/shop/{shopID}/station/{stationID}/event
 3. 状态变更时通过 MQTT 上报 `gate_status`。
 4. 后台接收 `gate_status` 后更新工位 `gate_status`。
 5. 如果该工位存在进行中订单，则后台触发内部事件逻辑并发送复合指令：
-   - 门禁打开：空调 `turn_on`，通风 `turn_off`
-   - 门禁关闭：空调 `turn_off`，通风 `turn_on`
+   - 门禁打开：空调 `turn_on`
+   - 门禁关闭：空调 `turn_off`
+   - 通风设备暂未启用，控制方式待确认
 6. `shop_server` 收到 `composite_command` 后依次执行 HomeAssistant 子命令。
 
 涉及代码：
@@ -495,11 +496,6 @@ shinecar/shop/{shopID}/command
         "command": "ha_control",
         "target": "air_conditioner",
         "action": "turn_on"
-      },
-      {
-        "command": "ha_control",
-        "target": "ventilation",
-        "action": "turn_off"
       }
     ]
   }
@@ -706,4 +702,3 @@ ssh scsp001 "ps aux | grep heartbeat_monitor | grep -v grep"
 6. `shop_server/internal/server/http.go` 和 `plate_handler.go`：了解门店设备 HTTP 回调。
 7. `shop_server/internal/service/device.go` 和 `ha_service.go`：了解设备执行逻辑。
 8. `shinecar-frontend/src/api` 和 `src/pages`：了解小程序调用入口和页面结构。
-

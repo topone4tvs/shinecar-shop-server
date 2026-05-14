@@ -683,7 +683,7 @@ func (dm *DeviceManager) ApplyHardwareGateReading(stationID string, source, valu
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	toOpen := !(source == 0 && value == 0)
+	toOpen := value != 0
 	prev, hadPrev := dm.gateStatus[stationID]
 	changed := !hadPrev || prev.IsOpen != toOpen
 

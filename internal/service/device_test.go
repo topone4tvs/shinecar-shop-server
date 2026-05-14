@@ -126,6 +126,14 @@ func TestDeviceManagerApplyHardwareGateReading(t *testing.T) {
 	if !status.IsOpen || status.Source != 1 || status.Value != 1 || status.Channel != GateChannelPlateAlarmGioIn {
 		t.Fatalf("unexpected open gate status: %+v", status)
 	}
+
+	snapshot, changed := dm.ApplyHardwareGateReading("001", 1, 0, GateChannelGioHTTP)
+	if !changed {
+		t.Fatalf("expected source=1,value=0 to change gate status")
+	}
+	if snapshot.IsOpen || snapshot.Source != 1 || snapshot.Value != 0 || snapshot.Channel != GateChannelGioHTTP {
+		t.Fatalf("expected source=1,value=0 to be closed, got %+v", snapshot)
+	}
 }
 
 func TestDeviceManagerUnionCommandsControlAirConditioner(t *testing.T) {

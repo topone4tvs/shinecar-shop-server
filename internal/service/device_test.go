@@ -136,7 +136,7 @@ func TestDeviceManagerApplyHardwareGateReading(t *testing.T) {
 	}
 }
 
-func TestDeviceManagerUnionCommandsControlAirConditioner(t *testing.T) {
+func TestDeviceManagerUnionStartSkipsAirConditionerAndFinishTurnsItOff(t *testing.T) {
 	initTestLogger(t)
 
 	var serviceCalls []string
@@ -195,10 +195,10 @@ func TestDeviceManagerUnionCommandsControlAirConditioner(t *testing.T) {
 		t.Fatalf("expected union finish success, got error: %v", finishResp.GetError())
 	}
 
-	if len(serviceCalls) != 2 {
-		t.Fatalf("expected 2 HA service calls, got %d: %+v", len(serviceCalls), serviceCalls)
+	if len(serviceCalls) != 1 {
+		t.Fatalf("expected 1 HA service call, got %d: %+v", len(serviceCalls), serviceCalls)
 	}
-	if serviceCalls[0] != "turn_on" || serviceCalls[1] != "turn_off" {
+	if serviceCalls[0] != "turn_off" {
 		t.Fatalf("unexpected HA service calls: %+v", serviceCalls)
 	}
 }

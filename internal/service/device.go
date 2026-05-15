@@ -180,10 +180,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 		}
 
 		// 3. 打开空调
-		if err := dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil); err != nil {
-			logger.Infof("执行打开空调指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
-			return dm.createErrorResponse(cmd, err), nil
-		}
+		//dm.callHaCommand(ctx, unionCmd.StationID, CommandUnionStart, nil)
 
 		// 4. 设置音量，并播放音乐
 		//haCmd := &HACommand{

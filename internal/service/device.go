@@ -16,6 +16,11 @@ const GateChannelGioHTTP = "gio_http"
 // GateChannelPlateAlarmGioIn plate 推送中的 AlarmGioIn。
 const GateChannelPlateAlarmGioIn = "plate_alarm_gio_in"
 
+const (
+	maxGateOpenDurationSeconds = 600
+	defaultGateOpenDelayMs     = 2000
+)
+
 // DeviceService 设备服务接口
 type DeviceService interface {
 	GetDeviceType() string
@@ -113,13 +118,13 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 	switch plateCmd.Command {
 	case CommandOpenGate:
 		// 使用抽象的门禁控制方法
-		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandOpenGate); err != nil {
+		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandOpenGate, plateCmd.DurationSeconds); err != nil {
 			logger.Infof("执行开门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
 	case CommandCloseGate:
 		// 使用抽象的门禁控制方法
-		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandCloseGate); err != nil {
+		if err := dm.executeGateCommand(ctx, plateCmd.StationID, CommandCloseGate, 0); err != nil {
 			logger.Infof("执行关门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
@@ -169,7 +174,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	case CommandUnionStart:
 		// 订单开启后要执行的命令
 		// 1. 开闸
-		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate); err != nil {
+		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandOpenGate, 0); err != nil {
 			logger.Infof("执行开门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
@@ -203,7 +208,7 @@ func (dm *DeviceManager) executeUnionCommand(ctx context.Context, cmd DeviceComm
 	case CommandUnionFinish:
 		// 订单关闭后要执行的命令
 		// 1. 关闸
-		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandCloseGate); err != nil {
+		if err := dm.executeGateCommand(ctx, unionCmd.StationID, CommandCloseGate, 0); err != nil {
 			logger.Infof("执行关门指令失败: 工位=%s, 错误=%v", unionCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
@@ -262,10 +267,10 @@ func (dm *DeviceManager) callHaCommand(ctx context.Context, stationID string, co
 }
 
 // executeGateCommand 执行门禁控制命令
-func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID string, command string) error {
+func (dm *DeviceManager) executeGateCommand(ctx context.Context, stationID string, command string, durationSeconds int) error {
 	switch command {
 	case CommandOpenGate:
-		return dm.openGate(ctx, stationID)
+		return dm.openGate(ctx, stationID, durationSeconds)
 	case CommandCloseGate:
 		return dm.closeGate(ctx, stationID)
 	default:
@@ -310,7 +315,7 @@ func (dm *DeviceManager) powerOff(ctx context.Context, stationID string, command
 }
 
 // openGate 开门操作
-func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
+func (dm *DeviceManager) openGate(ctx context.Context, stationID string, durationSeconds int) error {
 	// 检查门禁状态，如果门已经开启则不需要再次开门
 	//if dm.IsGateOpen(stationID) {
 	//	logger.Infof("门禁已开启，跳过开门指令: 工位=%s", stationID)
@@ -326,19 +331,31 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string) error {
 	//	return nil
 	//}
 
+	delayMs := resolveGateOpenDelayMs(durationSeconds)
+
 	// 执行开门指令
-	logger.Infof("执行开门指令: 工位=%s", stationID)
+	logger.Infof("执行开门指令: 工位=%s, 保持时长=%d秒, delay=%dms", stationID, durationSeconds, delayMs)
 	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
 				"io":    0,
 				"value": 2,
-				"delay": 2000,
+				"delay": delayMs,
 			},
 		},
 	})
 
 	return nil
+}
+
+func resolveGateOpenDelayMs(durationSeconds int) int {
+	if durationSeconds <= 0 {
+		return defaultGateOpenDelayMs
+	}
+	if durationSeconds > maxGateOpenDurationSeconds {
+		durationSeconds = maxGateOpenDurationSeconds
+	}
+	return durationSeconds * 1000
 }
 
 // closeGate 关门操作

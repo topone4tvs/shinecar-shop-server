@@ -139,6 +139,56 @@ func TestRouterHandleMQTTMessageOpenGate(t *testing.T) {
 	}
 }
 
+func TestRouterHandleMQTTMessageOpenGateWithDuration(t *testing.T) {
+	initTestLogger(t)
+
+	fakeClient := newFakeMQTTClient()
+	dm := NewDeviceManager(testConfig())
+	router := NewRouter(testConfig(), fakeClient, dm)
+
+	msg := MQTTMessage{
+		Type:      MessageTypeDevice,
+		Command:   CommandOpenGate,
+		ShopID:    "001",
+		StationID: "001",
+		Data: map[string]interface{}{
+			"duration_seconds": 900,
+			"source":           "user",
+			"order_id":         1001,
+		},
+		Timestamp: 1710000000,
+	}
+	payload, err := msg.ToJSON()
+	if err != nil {
+		t.Fatalf("failed to marshal mqtt message: %v", err)
+	}
+
+	err = router.handleMQTTMessage("shinecar/shop/001/station/001/command", payload)
+	if err != nil {
+		t.Fatalf("handleMQTTMessage returned error: %v", err)
+	}
+
+	response, ok := dm.GetPendingPlateResponse("001")
+	if !ok {
+		t.Fatalf("expected pending plate response")
+	}
+	responseMap, ok := response.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map response, got %T", response)
+	}
+	alarm, ok := responseMap["Response_AlarmInfoPlate"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected Response_AlarmInfoPlate in response: %+v", responseMap)
+	}
+	ioctrl, ok := alarm["ivs_ioctrl"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected ivs_ioctrl in response: %+v", alarm)
+	}
+	if ioctrl["delay"] != 600000 {
+		t.Fatalf("expected capped delay 600000ms, got %+v", ioctrl["delay"])
+	}
+}
+
 func TestRouterHandleMQTTMessageCompositeCommand(t *testing.T) {
 	initTestLogger(t)
 

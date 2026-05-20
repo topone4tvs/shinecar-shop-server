@@ -105,6 +105,12 @@ func (c *DefaultMessageConverter) createPlateCommand(baseCmd *BaseDeviceCommand,
 
 	// 根据不同的门禁命令设置特定数据
 	switch msg.Command {
+	case CommandOpenGate:
+		cmd.DurationSeconds = parseIntFromMap(msg.Data, "duration_seconds")
+		if source, ok := msg.Data["source"].(string); ok {
+			cmd.Source = source
+		}
+		cmd.OrderID = parseUint64FromMap(msg.Data, "order_id")
 	case CommandVoicePlay:
 		if text, ok := msg.Data["text"].(string); ok {
 			cmd.VoiceText = text
@@ -118,6 +124,47 @@ func (c *DefaultMessageConverter) createPlateCommand(baseCmd *BaseDeviceCommand,
 	}
 
 	return cmd, nil
+}
+
+func parseIntFromMap(data map[string]interface{}, key string) int {
+	value, ok := data[key]
+	if !ok {
+		return 0
+	}
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func parseUint64FromMap(data map[string]interface{}, key string) uint64 {
+	value, ok := data[key]
+	if !ok {
+		return 0
+	}
+	switch v := value.(type) {
+	case uint64:
+		return v
+	case int:
+		if v > 0 {
+			return uint64(v)
+		}
+	case int64:
+		if v > 0 {
+			return uint64(v)
+		}
+	case float64:
+		if v > 0 {
+			return uint64(v)
+		}
+	}
+	return 0
 }
 
 // createHACommand 创建HomeAssistant命令
@@ -211,8 +258,11 @@ func (c *DefaultMessageConverter) createCompositeCommand(baseCmd *BaseDeviceComm
 // PlateCommand 门禁系统命令
 type PlateCommand struct {
 	BaseDeviceCommand
-	VoiceText   string `json:"voice_text,omitempty"`
-	CallbackURL string `json:"callback_url,omitempty"`
+	VoiceText       string `json:"voice_text,omitempty"`
+	CallbackURL     string `json:"callback_url,omitempty"`
+	DurationSeconds int    `json:"duration_seconds,omitempty"`
+	Source          string `json:"source,omitempty"`
+	OrderID         uint64 `json:"order_id,omitempty"`
 }
 
 // Validate 验证门禁命令

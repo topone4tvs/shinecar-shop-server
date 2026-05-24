@@ -184,9 +184,13 @@ func TestRouterHandleMQTTMessageOpenGateWithDuration(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected ivs_ioctrl in response: %+v", alarm)
 	}
-	if ioctrl["delay"] != 600000 {
-		t.Fatalf("expected capped delay 600000ms, got %+v", ioctrl["delay"])
+	if ioctrl["delay"] != defaultGateOpenDelayMs {
+		t.Fatalf("expected default delay %dms, got %+v", defaultGateOpenDelayMs, ioctrl["delay"])
 	}
+	if _, ok := dm.getGateKeepOpenTaskID("001"); !ok {
+		t.Fatalf("expected keep-open task to be started")
+	}
+	dm.cancelGateKeepOpen("001")
 }
 
 func TestRouterHandleMQTTMessageCompositeCommand(t *testing.T) {

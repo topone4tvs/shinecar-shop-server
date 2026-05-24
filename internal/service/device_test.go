@@ -96,6 +96,105 @@ func TestDeviceManagerPendingPlateResponsesAreFIFO(t *testing.T) {
 	}
 }
 
+func TestDeviceManagerOpenGateWithDurationStartsKeepOpenTask(t *testing.T) {
+	initTestLogger(t)
+
+	dm := NewDeviceManager(testConfig())
+
+	err := dm.openGate(context.Background(), "001", 180)
+	if err != nil {
+		t.Fatalf("openGate returned error: %v", err)
+	}
+	defer dm.cancelGateKeepOpen("001")
+
+	if count := dm.GetPendingPlateResponseCount("001"); count != 1 {
+		t.Fatalf("expected one immediate open response, got %d", count)
+	}
+	firstTaskID, ok := dm.getGateKeepOpenTaskID("001")
+	if !ok {
+		t.Fatalf("expected keep-open task for station")
+	}
+
+	err = dm.openGate(context.Background(), "001", 180)
+	if err != nil {
+		t.Fatalf("second openGate returned error: %v", err)
+	}
+	secondTaskID, ok := dm.getGateKeepOpenTaskID("001")
+	if !ok {
+		t.Fatalf("expected replacement keep-open task for station")
+	}
+	if secondTaskID == firstTaskID {
+		t.Fatalf("expected repeated open to replace keep-open task")
+	}
+}
+
+func TestDeviceManagerCloseGateCancelsKeepOpenTask(t *testing.T) {
+	initTestLogger(t)
+
+	dm := NewDeviceManager(testConfig())
+	if err := dm.openGate(context.Background(), "001", 180); err != nil {
+		t.Fatalf("openGate returned error: %v", err)
+	}
+	if _, ok := dm.getGateKeepOpenTaskID("001"); !ok {
+		t.Fatalf("expected keep-open task for station")
+	}
+
+	if err := dm.closeGate(context.Background(), "001"); err != nil {
+		t.Fatalf("closeGate returned error: %v", err)
+	}
+	if _, ok := dm.getGateKeepOpenTaskID("001"); ok {
+		t.Fatalf("expected closeGate to cancel keep-open task")
+	}
+}
+
+func TestDeviceManagerUnionFinishCancelsKeepOpenTask(t *testing.T) {
+	initTestLogger(t)
+
+	haServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/states/climate.station_001_air_conditioner":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"entity_id": "climate.station_001_air_conditioner",
+				"state":     "on",
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/services/climate/turn_off":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			t.Fatalf("unexpected HA request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer haServer.Close()
+
+	cfg := testConfig()
+	cfg.Devices.HA.BaseURL = haServer.URL
+	dm := NewDeviceManager(cfg)
+	if err := dm.openGate(context.Background(), "001", 180); err != nil {
+		t.Fatalf("openGate returned error: %v", err)
+	}
+	if _, ok := dm.getGateKeepOpenTaskID("001"); !ok {
+		t.Fatalf("expected keep-open task for station")
+	}
+
+	resp, err := dm.ExecuteCommand(context.Background(), &UnionCommand{
+		BaseDeviceCommand: BaseDeviceCommand{
+			DeviceType: DeviceTypeUnion,
+			Command:    CommandUnionFinish,
+			StationID:  "001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("union finish returned error: %v", err)
+	}
+	if !resp.IsSuccess() {
+		t.Fatalf("expected union finish success, got error: %v", resp.GetError())
+	}
+	if _, ok := dm.getGateKeepOpenTaskID("001"); ok {
+		t.Fatalf("expected union finish to cancel keep-open task")
+	}
+}
+
 func TestDeviceManagerApplyHardwareGateReading(t *testing.T) {
 	initTestLogger(t)
 

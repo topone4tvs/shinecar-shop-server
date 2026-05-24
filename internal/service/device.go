@@ -19,6 +19,7 @@ const GateChannelPlateAlarmGioIn = "plate_alarm_gio_in"
 const (
 	maxGateOpenDurationSeconds = 600
 	defaultGateOpenDelayMs     = 2000
+	gateKeepOpenInterval       = 30 * time.Second
 )
 
 // DeviceService 设备服务接口
@@ -50,25 +51,33 @@ type GateStatus struct {
 	Channel    string    `json:"channel"`     // 最近一次读数来源
 }
 
+type gateKeepOpenTask struct {
+	id     uint64
+	cancel context.CancelFunc
+}
+
 // DeviceManager 设备管理器
 type DeviceManager struct {
-	config         *config.Config
-	deviceStatus   map[string]*DeviceStatus // 设备在线状态
-	gateStatus     map[string]*GateStatus   // 门禁状态（独立管理，仅当前快照）
-	plateResponses map[string][]interface{} // 待处理的门禁响应队列
-	mutex          sync.RWMutex
-	haService      *HaService
+	config            *config.Config
+	deviceStatus      map[string]*DeviceStatus // 设备在线状态
+	gateStatus        map[string]*GateStatus   // 门禁状态（独立管理，仅当前快照）
+	plateResponses    map[string][]interface{} // 待处理的门禁响应队列
+	gateKeepOpenTasks map[string]*gateKeepOpenTask
+	gateKeepOpenSeq   uint64
+	mutex             sync.RWMutex
+	haService         *HaService
 }
 
 // NewDeviceManager 创建设备管理器
 func NewDeviceManager(cfg *config.Config) *DeviceManager {
 	return &DeviceManager{
-		config:         cfg,
-		deviceStatus:   make(map[string]*DeviceStatus),
-		gateStatus:     make(map[string]*GateStatus),
-		plateResponses: make(map[string][]interface{}),
-		mutex:          sync.RWMutex{},
-		haService:      NewHaService(cfg),
+		config:            cfg,
+		deviceStatus:      make(map[string]*DeviceStatus),
+		gateStatus:        make(map[string]*GateStatus),
+		plateResponses:    make(map[string][]interface{}),
+		gateKeepOpenTasks: make(map[string]*gateKeepOpenTask),
+		mutex:             sync.RWMutex{},
+		haService:         NewHaService(cfg),
 	}
 }
 
@@ -331,36 +340,112 @@ func (dm *DeviceManager) openGate(ctx context.Context, stationID string, duratio
 	//	return nil
 	//}
 
-	delayMs := resolveGateOpenDelayMs(durationSeconds)
+	keepOpenDuration := resolveGateKeepOpenDuration(durationSeconds)
+	dm.issueOpenGate(stationID)
+	if keepOpenDuration > 0 {
+		dm.startGateKeepOpen(stationID, keepOpenDuration)
+	}
 
-	// 执行开门指令
-	logger.Infof("执行开门指令: 工位=%s, 保持时长=%d秒, delay=%dms", stationID, durationSeconds, delayMs)
+	return nil
+}
+
+func resolveGateKeepOpenDuration(durationSeconds int) time.Duration {
+	if durationSeconds <= 0 {
+		return 0
+	}
+	if durationSeconds > maxGateOpenDurationSeconds {
+		durationSeconds = maxGateOpenDurationSeconds
+	}
+	return time.Duration(durationSeconds) * time.Second
+}
+
+func (dm *DeviceManager) issueOpenGate(stationID string) {
+	// 执行开门指令。硬件不支持长时间保持开门，固定使用短脉冲，长时间开门由 keep-open 任务补发。
+	logger.Infof("执行开门指令: 工位=%s, delay=%dms", stationID, defaultGateOpenDelayMs)
 	dm.SetPendingPlateResponse(stationID, map[string]interface{}{
 		"Response_AlarmInfoPlate": map[string]interface{}{
 			"ivs_ioctrl": map[string]interface{}{ // 通电
 				"io":    0,
 				"value": 2,
-				"delay": delayMs,
+				"delay": defaultGateOpenDelayMs,
 			},
 		},
 	})
-
-	return nil
 }
 
-func resolveGateOpenDelayMs(durationSeconds int) int {
-	if durationSeconds <= 0 {
-		return defaultGateOpenDelayMs
+func (dm *DeviceManager) startGateKeepOpen(stationID string, duration time.Duration) {
+	dm.cancelGateKeepOpen(stationID)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	dm.mutex.Lock()
+	dm.gateKeepOpenSeq++
+	task := &gateKeepOpenTask{
+		id:     dm.gateKeepOpenSeq,
+		cancel: cancel,
 	}
-	if durationSeconds > maxGateOpenDurationSeconds {
-		durationSeconds = maxGateOpenDurationSeconds
+	dm.gateKeepOpenTasks[stationID] = task
+	dm.mutex.Unlock()
+
+	logger.Infof("启动门禁续开任务: 工位=%s, duration=%s, interval=%s", stationID, duration, gateKeepOpenInterval)
+	go func() {
+		defer dm.clearGateKeepOpenTask(stationID, task.id)
+
+		timer := time.NewTimer(duration)
+		ticker := time.NewTicker(gateKeepOpenInterval)
+		defer timer.Stop()
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				logger.Infof("门禁续开任务补发开门指令: 工位=%s", stationID)
+				dm.issueOpenGate(stationID)
+			case <-timer.C:
+				logger.Infof("门禁续开任务到期: 工位=%s", stationID)
+				return
+			case <-ctx.Done():
+				logger.Infof("门禁续开任务取消: 工位=%s", stationID)
+				return
+			}
+		}
+	}()
+}
+
+func (dm *DeviceManager) cancelGateKeepOpen(stationID string) {
+	dm.mutex.Lock()
+	task := dm.gateKeepOpenTasks[stationID]
+	delete(dm.gateKeepOpenTasks, stationID)
+	dm.mutex.Unlock()
+
+	if task != nil && task.cancel != nil {
+		task.cancel()
 	}
-	return durationSeconds * 1000
+}
+
+func (dm *DeviceManager) getGateKeepOpenTaskID(stationID string) (uint64, bool) {
+	dm.mutex.RLock()
+	defer dm.mutex.RUnlock()
+
+	task := dm.gateKeepOpenTasks[stationID]
+	if task == nil {
+		return 0, false
+	}
+	return task.id, true
+}
+
+func (dm *DeviceManager) clearGateKeepOpenTask(stationID string, taskID uint64) {
+	dm.mutex.Lock()
+	defer dm.mutex.Unlock()
+
+	if task := dm.gateKeepOpenTasks[stationID]; task != nil && task.id == taskID {
+		delete(dm.gateKeepOpenTasks, stationID)
+	}
 }
 
 // closeGate 关门操作
 func (dm *DeviceManager) closeGate(ctx context.Context, stationID string) error {
 	logger.Infof("执行关门指令: 工位=%s", stationID)
+	dm.cancelGateKeepOpen(stationID)
 	// 检查门禁状态，如果门已经开启则不需要再次开门
 	//if dm.IsGateOpen(stationID) {
 	//	logger.Infof("门禁已开启，跳过开门指令: 工位=%s", stationID)

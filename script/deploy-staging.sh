@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REMOTE_HOST="${PRESTAGE_REMOTE_HOST:?请设置 PRESTAGE_REMOTE_HOST，例如 shinecar@1.2.3.4}"
-REMOTE_DIR="${PRESTAGE_REMOTE_DIR:-/data/shinecar/deploy/prestage}"
+DEFAULT_REMOTE_HOST="shinecar@iZbp11vkcwgx3541v88hpaZ"
+DEFAULT_REMOTE_DIR="/data/shinecar/deploy/prestage"
+
+REMOTE_HOST="${PRESTAGE_REMOTE_HOST:-${DEFAULT_REMOTE_HOST}}"
+REMOTE_DIR="${PRESTAGE_REMOTE_DIR:-${DEFAULT_REMOTE_DIR}}"
 BINARY_NAME="shop_server"
 LOCAL_DIST="dist/prestage"
 LOCAL_BINARY="${LOCAL_DIST}/${BINARY_NAME}"

@@ -51,3 +51,10 @@ clean:
 test:
 	@echo "运行测试..."
 	go test ./...
+
+# 部署目标
+.PHONY: deploy-staging
+deploy-staging:
+	@echo "部署到新预发环境..."
+	@chmod +x script/deploy-staging.sh
+	@./script/deploy-staging.sh

@@ -56,5 +56,5 @@ test:
 .PHONY: deploy-staging
 deploy-staging:
 	@echo "部署到新预发环境..."
-	@chmod +x script/deploy-staging.sh
-	@./script/deploy-staging.sh
+	@chmod +x scripts/deploy-staging.sh
+	@./scripts/deploy-staging.sh

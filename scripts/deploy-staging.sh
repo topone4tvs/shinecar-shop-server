@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEFAULT_REMOTE_HOST="shinecar@iZbp11vkcwgx3541v88hpaZ"
+DEFAULT_REMOTE_HOST="shinecar@120.26.33.155"
 DEFAULT_REMOTE_DIR="/data/shinecar/deploy/prestage"
 
 REMOTE_HOST="${PRESTAGE_REMOTE_HOST:-${DEFAULT_REMOTE_HOST}}"

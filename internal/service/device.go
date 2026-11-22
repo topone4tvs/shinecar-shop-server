@@ -137,6 +137,37 @@ func (dm *DeviceManager) executePlateCommand(ctx context.Context, cmd DeviceComm
 			logger.Infof("执行关门指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
 			return dm.createErrorResponse(cmd, err), nil
 		}
+	// 管理端保养/清洁：复用已有 powerOn/powerOff/openGate（老店走门禁一体机继电器 + 开闸脉冲）。
+	// clean 与 power 的物理差异只在「是否点动开门」，顺序对齐新店 edge：先动电、再开门。
+	case CommandPowerOn:
+		if err := dm.powerOn(ctx, plateCmd.StationID, plateCmd.Command); err != nil {
+			logger.Infof("执行通电指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+	case CommandPowerOff:
+		if err := dm.powerOff(ctx, plateCmd.StationID, plateCmd.Command); err != nil {
+			logger.Infof("执行断电指令失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+	case CommandCleanStart:
+		if err := dm.powerOn(ctx, plateCmd.StationID, plateCmd.Command); err != nil {
+			logger.Infof("清洁通电失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+		// durationSeconds=0：单次开闸脉冲，不启 keep-open（清洁不需要维持长开）
+		if err := dm.openGate(ctx, plateCmd.StationID, 0); err != nil {
+			logger.Infof("清洁开门失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+	case CommandCleanEnd:
+		if err := dm.powerOff(ctx, plateCmd.StationID, plateCmd.Command); err != nil {
+			logger.Infof("清洁断电失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
+		if err := dm.openGate(ctx, plateCmd.StationID, 0); err != nil {
+			logger.Infof("清洁结束开门失败: 工位=%s, 错误=%v", plateCmd.StationID, err)
+			return dm.createErrorResponse(cmd, err), nil
+		}
 	case CommandVoicePlay:
 		dm.SetPendingPlateResponse(plateCmd.StationID, map[string]interface{}{
 			"Response_AlarmInfoPlate": map[string]interface{}{

@@ -83,6 +83,9 @@ func (c *DefaultMessageConverter) getDeviceTypeFromCommand(command string) (stri
 	switch command {
 	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger:
 		return DeviceTypePlate, nil
+	// 管理端通电/断电/清洁：全部走门禁一体机的 IO 控制，复用 PlateCommand。
+	case CommandPowerOn, CommandPowerOff, CommandCleanStart, CommandCleanEnd:
+		return DeviceTypePlate, nil
 	case CommandHAControl, CommandHANotice:
 		return DeviceTypeHA, nil
 	case CommandCompositeCommand:

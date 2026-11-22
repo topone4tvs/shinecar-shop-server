@@ -42,6 +42,13 @@ const (
 	CommandUnionStart         = "union_start"          // 联动订单开始
 	CommandUnionFinish        = "union_finish"         // 联动订单结束
 	CommandHeartbeat          = "heartbeat"            // 心跳
+
+	// 管理端 p0a 新增：老店复用已有 powerOn/powerOff/openGate，不引入新硬件能力。
+	// 清洁与通断电是两条独立命令，避免改动 union_* 订单主链路。
+	CommandPowerOn    = "power_on"    // 通电（保养占用）
+	CommandPowerOff   = "power_off"   // 断电
+	CommandCleanStart = "clean_start" // 开始清洁 = 通电 + 开门点动
+	CommandCleanEnd   = "clean_end"   // 结束清洁 = 断电 + 开门点动
 )
 
 // 要操作的设备类型
@@ -202,7 +209,8 @@ func isValidMessageType(msgType string) bool {
 func isValidCommand(command string) bool {
 	switch command {
 	case CommandOpenGate, CommandCloseGate, CommandVoicePlay, CommandSnapshot, CommandTrigger,
-		CommandHAControl, CommandHANotice, CommandCompositeCommand, CommandGetStatus, CommandUnionStart, CommandUnionFinish:
+		CommandHAControl, CommandHANotice, CommandCompositeCommand, CommandGetStatus, CommandUnionStart, CommandUnionFinish,
+		CommandPowerOn, CommandPowerOff, CommandCleanStart, CommandCleanEnd:
 		return true
 	default:
 		return false
